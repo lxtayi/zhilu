@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="知路：从一个问题出发，找到和你有话可说的人。">
+    <title>知路｜从问题到值得认识的人</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="知路首页">
+        <span class="brand-mark">知</span>
+        <span class="brand-name">知路</span>
+        <span class="brand-divider"></span>
+        <span class="brand-tagline">沿观点航线，遇见具体的人</span>
+      </a>
+      <div class="header-actions">
+        <span id="modeBadge" class="mode-badge">正在检查服务</span>
+        <button id="restartButton" class="text-button" type="button" hidden>重新探索</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="heroSection" class="hero shell">
+        <div class="hero-copy">
+          <p class="eyebrow">THE ATLAS OF MINDS · 知路群岛</p>
+          <h1>从一个问题启航，<br><span>抵达与你有关的人。</span></h1>
+          <p class="hero-description">
+            知路把知乎里的真实回答绘成四座观点岛。每一次点击，
+            都会带你看见一种判断，以及站在这种判断背后的人。
+          </p>
+        </div>
+
+        <form id="questionForm" class="question-card">
+          <label for="questionInput">你最近在认真思考什么？</label>
+          <div class="input-wrap">
+            <textarea
+              id="questionInput"
+              name="question"
+              rows="3"
+              minlength="5"
+              maxlength="100"
+              required
+              placeholder="例如：技术转 AI 产品值得吗？"
+            >技术转 AI 产品值得吗？</textarea>
+            <span id="charCount" class="char-count">14 / 100</span>
+          </div>
+          <button class="primary-button" type="submit">
+            <span>开始探索</span>
+            <span aria-hidden="true">→</span>
+          </button>
+          <div class="examples" aria-label="示例问题">
+            <span>也可以问</span>
+            <button type="button" data-question="离开大厂去创业，值得吗？">离开大厂去创业</button>
+            <button type="button" data-question="AI 会取代产品经理吗？">AI 与产品经理</button>
+            <button type="button" data-question="喜欢科研，但不确定是否适合读博，应该如何决定？">是否适合读博</button>
+          </div>
+          <p class="privacy-note">
+            <span aria-hidden="true">◇</span>
+            重要判断均保留来源；未经确认，不替你发布任何内容。
+          </p>
+        </form>
+
+        <div class="hero-footnote">
+          <span>没有唯一航线，也没有标准答案</span>
+          <i></i>
+          <span>先看见不同判断，再决定想和谁聊聊</span>
+        </div>
+      </section>
+
+      <section id="progressSection" class="progress-section shell" hidden aria-live="polite">
+        <div class="progress-orbit" aria-hidden="true">
+          <span class="orbit-core">知</span>
+          <span class="orbit-dot dot-one"></span>
+          <span class="orbit-dot dot-two"></span>
+          <span class="orbit-dot dot-three"></span>
+        </div>
+        <p class="eyebrow">正在沿着问题寻找线索</p>
+        <h2 id="progressTitle">正在理解你的问题</h2>
+        <p id="progressDetail">保留原问题，拆解不同的搜索方向。</p>
+        <ol id="progressSteps" class="progress-steps">
+          <li class="active">理解问题</li>
+          <li>搜索知乎</li>
+          <li>整理观点</li>
+          <li>寻找知友</li>
+        </ol>
+      </section>
+
+      <section id="resultSection" class="results shell" hidden>
+        <div class="result-heading">
+          <div>
+            <p class="eyebrow">THE ATLAS OF MINDS · 你的认知群岛</p>
+            <h2 id="resultQuestion"></h2>
+          </div>
+          <span id="resultMode" class="result-mode"></span>
+        </div>
+
+        <div class="analysis-strip">
+          <div>
+            <span class="mini-label">核心矛盾</span>
+            <p id="coreTension"></p>
+          </div>
+          <div>
+            <span class="mini-label">搜索路径</span>
+            <div id="queryPills" class="query-pills"></div>
+          </div>
+        </div>
+
+        <div id="warningBox" class="warning-box" hidden></div>
+
+        <section class="map-section" aria-labelledby="mapTitle">
+          <div class="section-title-row">
+            <div>
+              <p class="eyebrow">01 · CHOOSE AN ISLAND</p>
+              <h3 id="mapTitle">四座岛，四种看待问题的方式</h3>
+            </div>
+            <p>点击岛屿进入场景，岛上的头像就是值得认识的人</p>
+          </div>
+          <div id="islandMap" class="island-map"></div>
+          <div class="map-legend" aria-label="地图图例">
+            <span><i class="legend-node"></i>探索节点</span>
+            <span><i class="legend-route"></i>观点航线</span>
+            <span>岛上文字与人物均来自当前问题的搜索结果</span>
+          </div>
+        </section>
+
+        <section class="closing-section">
+          <p class="eyebrow">一次探索的终点</p>
+          <h3>找到至少一个<br><span>“我想进一步了解的人”</span></h3>
+          <button id="bottomRestart" class="secondary-button" type="button">换一个问题继续探索</button>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="personDialog" class="person-dialog">
+      <button id="closeDialog" class="dialog-close" type="button" aria-label="关闭人物详情">×</button>
+      <div id="personContent"></div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <footer>
+      <span class="brand-mark small">知</span>
+      <p>每一个问题，都意外通向和你有关的人。</p>
+      <span>知乎黑客松 2026 · 社区连接与兴趣社交</span>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

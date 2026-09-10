@@ -1,0 +1,19 @@
+{
+  "name": "zhilu-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "知路：从问题出发，找到和你有话可说的人。",
+  "scripts": {
+    "dev": "node --watch server.mjs",
+    "start": "node server.mjs",
+    "test": "node --test --test-concurrency=1"
+  },
+  "engines": {
+    "node": ">=20 <25"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  }
+}
