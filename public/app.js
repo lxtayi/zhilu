@@ -35,7 +35,8 @@ const state = {
   result: null,
   selectedClusterIndex: -1,
   transitioning: false,
-  progressTimer: null
+  progressTimer: null,
+  trail: null
 };
 
 function escapeHtml(value) {
@@ -157,6 +158,7 @@ async function submitQuestion(question) {
 
     stopProgress();
     state.result = payload;
+    state.trail = { question: payload.question, branches: new Map() };
     state.selectedClusterIndex = -1;
     renderResult();
     saveRecentQuestion(question);
@@ -206,6 +208,8 @@ function renderResult() {
   elements.warningBox.textContent = warnings.map((warning) => warning.message).join(" ");
 
   renderIslands();
+  const closing = document.querySelector(".closing-section");
+  if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束探索，查看链路树"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
 }
 
 function renderIslands() {
@@ -243,6 +247,7 @@ async function enterIsland(index) {
   const cluster = state.result.clusters[index];
   if (!cluster) return;
 
+  track("island", { index, name: cluster.name, summary: cluster.summary, color: safeColor(cluster.color) });
   state.transitioning = true;
   state.selectedClusterIndex = index;
   elements.islandMap.classList.add("is-transitioning");
@@ -332,6 +337,7 @@ async function openPerson(person, cluster, color) {
   const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]);
   const sourceUrl = safeZhihuUrl(evidence?.url);
   const sourceLabel = evidence?.isSynthetic ? "打开知乎搜索" : "查看知乎原文";
+  track("person", { person, cluster, color, evidence });
 
   elements.personContent.innerHTML = `
     <div class="dialog-body" style="--person-color:${color}">
@@ -355,7 +361,7 @@ async function openPerson(person, cluster, color) {
           <cite>${escapeHtml(evidence?.title || "内容来源整理中")}${evidence?.isSynthetic ? " · 演示内容" : " · 内容节选"}</cite>
         </div>
         <div class="dialog-actions">
-          <a class="outline-button" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${sourceLabel}</a>
+          <a id="openSource" class="outline-button" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${sourceLabel}</a>
           <button id="generateDrafts" class="outline-button primary" type="button">生成破冰问题</button>
         </div>
       </section>
@@ -365,6 +371,7 @@ async function openPerson(person, cluster, color) {
   `;
 
   elements.dialog.showModal();
+  document.querySelector("#openSource").addEventListener("click", () => { const branch = state.trail?.branches.get(state.result.clusters.indexOf(cluster)); const item = branch?.people.get(person.name || person.quote?.evidenceId); if (item) item.opened = true; });
   document.querySelector("#generateDrafts").addEventListener("click", (event) => {
     generateDrafts(event.currentTarget, person, evidence);
   });
@@ -447,6 +454,37 @@ async function copyText(text) {
   showToast("草稿已复制，发送前记得再看一遍。");
 }
 
+
+function track(type, payload) {
+  if (!state.trail) return;
+  if (type === "island") {
+    if (!state.trail.branches.has(payload.index)) state.trail.branches.set(payload.index, { ...payload, people: new Map() });
+    return;
+  }
+  const index = state.result.clusters.indexOf(payload.cluster);
+  track("island", { index, name: payload.cluster.name, summary: payload.cluster.summary, color: safeColor(payload.color) });
+  const branch = state.trail.branches.get(index);
+  const key = payload.person.name || payload.person.quote?.evidenceId;
+  const old = branch.people.get(key) || {};
+  branch.people.set(key, { ...old, name: payload.person.name, headline: payload.person.headline || "相关内容作者", avatar: payload.person.avatar, opened: old.opened || false });
+}
+function showTrail(continueExplore) {
+  const branches = [...(state.trail?.branches?.values() || [])];
+  if (!branches.length) return continueExplore();
+  const dialog = document.createElement("dialog");
+  dialog.className = "person-dialog";
+  dialog.innerHTML = '<div class="dialog-body trail-dialog"><button class="dialog-close" type="button">×</button><p class="eyebrow">YOUR EXPLORATION TRAIL</p><h2>这次探索，长成了一棵树</h2><p class="trail-note">树干是你的问题；树枝是实际点过的观点岛；叶片是你主动查看过的人。</p><div class="trail-tree"><div class="trail-trunk"><small>本次问题</small><strong>' + escapeHtml(state.trail.question) + '</strong></div><div class="trail-branches">' + branches.map((branch) => '<section class="trail-branch" style="--trail-color:' + escapeHtml(branch.color) + '"><small>观点树枝</small><h3>' + escapeHtml(branch.name) + '</h3><p>' + escapeHtml(branch.summary) + '</p><div>' + [...branch.people.values()].map((person) => '<article class="trail-leaf">' + avatarMarkup(person) + '<span><strong>' + escapeHtml(person.name) + '</strong><small>' + escapeHtml(person.headline) + '</small></span><em>' + (person.opened ? "已查看主页" : "感兴趣") + '</em></article>').join("") + '</div></section>').join("") + '</div></div><button class="outline-button primary trail-next" type="button">换一个问题继续探索</button></div>';
+  document.body.append(dialog);
+  dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
+  dialog.querySelector(".trail-next").addEventListener("click", () => { dialog.close(); continueExplore(); });
+  dialog.showModal();
+}
+function finishRestart() {
+  if (elements.dialog.open) elements.dialog.close();
+  elements.results.hidden = true; elements.progress.hidden = true; elements.hero.hidden = false; elements.restart.hidden = true;
+  state.result = null; state.trail = null; window.scrollTo({ top: 0, behavior: "smooth" }); elements.input.focus();
+}
+
 let toastTimer;
 function showToast(message) {
   window.clearTimeout(toastTimer);
@@ -455,16 +493,7 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
 }
 
-function restart() {
-  if (elements.dialog.open) elements.dialog.close();
-  elements.results.hidden = true;
-  elements.progress.hidden = true;
-  elements.hero.hidden = false;
-  elements.restart.hidden = true;
-  state.result = null;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  elements.input.focus();
-}
+function restart() { showTrail(finishRestart); }
 
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
