@@ -540,3 +540,372 @@ elements.dialog.addEventListener("click", (event) => {
 
 updateCharCount();
 checkHealth();
+
+/* Voyage map modal v2 */
+(() => {
+  if (window.__ZHILU_VOYAGE_MAP_V2__) return;
+  window.__ZHILU_VOYAGE_MAP_V2__ = true;
+
+  const voyageState = {
+    islands: new Map(),
+    order: [],
+    dialog: null,
+    animationFrame: 0
+  };
+  let bypassLegacyTrail = false;
+
+  const layouts = [
+    { x: 245, y: 170, cardX: 46, cardY: 80, align: "left" },
+    { x: 842, y: 174, cardX: 734, cardY: 78, align: "right" },
+    { x: 270, y: 406, cardX: 50, cardY: 326, align: "left" },
+    { x: 832, y: 407, cardX: 724, cardY: 330, align: "right" }
+  ];
+
+  function resetVoyage() {
+    voyageState.islands.clear();
+    voyageState.order.length = 0;
+  }
+
+  function rememberIsland(index, clusterOverride) {
+    const cluster = clusterOverride || state.result?.clusters?.[index];
+    if (!cluster) return null;
+    let record = voyageState.islands.get(index);
+    if (!record) {
+      record = { index, cluster, people: new Map() };
+      voyageState.islands.set(index, record);
+      voyageState.order.push(index);
+    } else {
+      record.cluster = cluster;
+    }
+    return record;
+  }
+
+  function rememberPerson(person, cluster) {
+    const index = Math.max(0, state.result?.clusters?.indexOf(cluster) ?? 0);
+    const record = rememberIsland(index, cluster);
+    if (!record || !person) return;
+    const key = person.id || person.url || person.name || String(record.people.size);
+    record.people.set(key, person);
+  }
+
+  function ensureTrigger() {
+    const host = document.querySelector(".closing-section") || elements.results;
+    if (!host) return;
+    let button = host.querySelector(".voyage-launch, .trail-trigger, .trail");
+    if (!button) {
+      button = document.createElement("button");
+      const restartButton = host.querySelector("#bottomRestart");
+      if (restartButton) host.insertBefore(button, restartButton);
+      else host.prepend(button);
+    }
+    button.type = "button";
+    button.className = "secondary-button voyage-launch";
+    button.textContent = "结束本次探索 · 生成航线";
+    button.setAttribute("aria-label", "结束本次探索并生成动态航线");
+    button.onclick = (event) => {
+      event.preventDefault();
+      showVoyage();
+    };
+  }
+
+  const baseRenderResult = renderResult;
+  renderResult = function voyageRenderResult() {
+    const result = baseRenderResult.apply(this, arguments);
+    ensureStyles();
+    ensureTrigger();
+    return result;
+  };
+
+  const baseEnterIsland = enterIsland;
+  enterIsland = async function voyageEnterIsland(index) {
+    rememberIsland(index);
+    return baseEnterIsland.apply(this, arguments);
+  };
+
+  const baseOpenPerson = openPerson;
+  openPerson = function voyageOpenPerson(person, cluster) {
+    rememberPerson(person, cluster);
+    return baseOpenPerson.apply(this, arguments);
+  };
+
+  const baseSubmitQuestion = submitQuestion;
+  submitQuestion = async function voyageSubmitQuestion() {
+    resetVoyage();
+    return baseSubmitQuestion.apply(this, arguments);
+  };
+
+  function branchRecords() {
+    const own = voyageState.order
+      .map((index) => voyageState.islands.get(index))
+      .filter(Boolean);
+    if (own.length) return own;
+
+    const legacy = typeof state !== "undefined" ? state.trail?.branches : null;
+    if (!legacy) return [];
+    const values = legacy instanceof Map ? [...legacy.values()] : Array.isArray(legacy) ? legacy : Object.values(legacy);
+    return values.map((branch, order) => ({
+      index: Number.isInteger(branch.index) ? branch.index : order,
+      cluster: branch.cluster || branch,
+      people: branch.people instanceof Map ? branch.people : new Map(Object.entries(branch.people || {}))
+    }));
+  }
+
+  function routePath(points) {
+    if (points.length < 2) return "";
+    let value = `M ${points[0].x} ${points[0].y}`;
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      const direction = index % 2 ? -1 : 1;
+      const controlX = (previous.x + current.x) / 2 + direction * Math.min(84, Math.abs(current.y - previous.y) * 0.34);
+      const controlY = (previous.y + current.y) / 2 + direction * Math.min(62, Math.abs(current.x - previous.x) * 0.12);
+      value += ` Q ${controlX.toFixed(1)} ${controlY.toFixed(1)} ${current.x} ${current.y}`;
+    }
+    return value;
+  }
+
+  function branchPath(start, point, index) {
+    const sway = index % 2 ? 82 : -82;
+    return `M ${start.x} ${start.y} Q ${((start.x + point.x) / 2 + sway).toFixed(1)} ${((start.y + point.y) / 2 - 36).toFixed(1)} ${point.x} ${point.y}`;
+  }
+
+  function initials(name) {
+    const value = String(name || "知友").trim();
+    return escapeHtml(value.slice(0, 1) || "知");
+  }
+
+  function avatarFor(person) {
+    const raw = person?.avatar?.url || person?.avatarUrl || person?.avatar_url || "";
+    const url = raw && typeof safeAvatarUrl === "function" ? safeAvatarUrl(raw) : "";
+    if (url) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
+    return `<span aria-hidden="true">${initials(person?.name)}</span>`;
+  }
+
+  function personCards(records) {
+    const cards = [];
+    records.forEach((record, islandOrder) => {
+      const people = record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {});
+      people.slice(0, 2).forEach((person, personIndex) => {
+        const layout = layouts[record.index % layouts.length] || layouts[islandOrder % layouts.length];
+        const offsetY = personIndex * 62;
+        const status = person.profileOpened ? "已点击主页" : "已查看人物";
+        cards.push(`
+          <article class="voyage-person-card ${layout.align}" style="--card-x:${(layout.cardX / 11).toFixed(2)}%;--card-y:${((layout.cardY + offsetY) / 5.5).toFixed(2)}%">
+            <span class="voyage-person-avatar">${avatarFor(person)}</span>
+            <span class="voyage-person-copy">
+              <strong>${escapeHtml(person.name || "知乎知友")}</strong>
+              <small>${escapeHtml(person.headline || person.recommendationType || "相关内容创作者")}</small>
+              <em><i aria-hidden="true">●</i>${status}</em>
+            </span>
+          </article>
+        `);
+      });
+    });
+    return cards.join("");
+  }
+
+  function islandCards(records) {
+    return records.map((record, order) => {
+      const cluster = record.cluster || {};
+      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      return `
+        <article class="voyage-island-label" style="--island-x:${(layout.x / 11).toFixed(2)}%;--island-y:${(layout.y / 5.5).toFixed(2)}%;--island-delay:${order * 90}ms">
+          <span class="voyage-island-icon" aria-hidden="true">${order === records.length - 1 ? "⚑" : "⌁"}</span>
+          <strong>${escapeHtml(cluster.name || `观点岛 ${order + 1}`)}</strong>
+          <small>${escapeHtml(cluster.summary || "从不同的视角看见更多可能")}</small>
+          <span>${order + 1}</span>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function showVoyage(nextAction) {
+    if (bypassLegacyTrail) {
+      if (typeof nextAction === "function") nextAction();
+      return;
+    }
+    const records = branchRecords();
+    if (!records.length) {
+      if (typeof nextAction === "function") return nextAction();
+      showToast("先点击一座岛屿，再生成你的探索航线。");
+      return;
+    }
+
+    if (voyageState.dialog?.open) voyageState.dialog.close();
+    ensureStyles();
+
+    const visited = records.slice(0, 4);
+    const people = visited.flatMap((record) => record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {}));
+    const start = { x: 550, y: 510 };
+    const routePoints = [start, ...visited.map((record, order) => {
+      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      return { x: layout.x, y: layout.y };
+    })];
+    const mainPath = routePath(routePoints);
+    const routeId = `voyage-route-${Date.now()}`;
+    const branchLines = routePoints.slice(1).map((point, index) => `<path class="voyage-branch-route" d="${branchPath(start, point, index)}"></path>`).join("");
+    const stopMarkers = routePoints.slice(1).map((point, index) => `<g class="voyage-stop" transform="translate(${point.x} ${point.y})"><circle r="12"></circle><circle r="4"></circle><text y="-17">${index + 1}</text></g>`).join("");
+    const names = visited.map((record) => record.cluster?.name || "观点岛");
+    const personNames = people.map((person) => person?.name).filter(Boolean);
+    const question = state.result?.question || state.trail?.question || "本次探索的问题";
+
+    const dialog = document.createElement("dialog");
+    dialog.className = "voyage-map-dialog";
+    dialog.setAttribute("aria-labelledby", "voyageMapTitle");
+    dialog.innerHTML = `
+      <div class="voyage-map-shell">
+        <button class="voyage-map-close" type="button" aria-label="关闭航线回顾">×</button>
+        <header class="voyage-map-header">
+          <p><span></span>知路 · 探索回顾<span></span></p>
+          <h2 id="voyageMapTitle">你的探索航线<i aria-hidden="true"></i></h2>
+          <strong>1 个问题 · ${visited.length} 座观点岛 · ${people.length} 位知友</strong>
+        </header>
+
+        <section class="voyage-chart" aria-label="本次探索的动态航海地图">
+          <p class="voyage-quote">“ 世界不只有一个答案<br>但总有更广阔的视角 ”</p>
+          <div class="voyage-compass" aria-hidden="true"><b>N</b><i></i><span>W&nbsp;&nbsp;&nbsp;&nbsp;E</span><em>S</em></div>
+          <svg class="voyage-routes" viewBox="0 0 1100 550" preserveAspectRatio="none" aria-hidden="true">
+            ${branchLines}
+            <path class="voyage-main-route" id="${routeId}" d="${mainPath}"></path>
+            <path class="voyage-route-progress" d="${mainPath}"></path>
+            ${stopMarkers}
+            <g class="voyage-ship" transform="translate(${start.x} ${start.y})">
+              <path class="ship-hull" d="M-22 8 Q0 20 24 7 L17 17 Q0 27 -20 16 Z"></path>
+              <path class="ship-mast" d="M0 8 V-29"></path>
+              <path class="ship-sail-a" d="M-2 -27 L-20 2 L-2 6 Z"></path>
+              <path class="ship-sail-b" d="M3 -24 L19 3 L3 6 Z"></path>
+              <path class="ship-flag" d="M1 -29 L13 -24 L1 -20 Z"></path>
+            </g>
+          </svg>
+          ${islandCards(visited)}
+          ${personCards(visited)}
+          <div class="voyage-question-plaque">
+            <small>本次问题</small>
+            <strong>${escapeHtml(question)}</strong>
+          </div>
+          <p class="voyage-map-note">演示航线 · 仅展示本次点击记录</p>
+        </section>
+
+        <section class="voyage-harvest">
+          <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong></div></div>
+          <div class="voyage-harvest-copy">
+            <p><b>我看了</b>${escapeHtml(names.join("、"))}</p>
+            <p><b>我遇见</b>${personNames.length ? escapeHtml(personNames.join("、")) : "还没有打开人物卡片"}</p>
+            <p><b>下一步</b>${people.length ? "继续认识感兴趣的人，带着一个具体问题发起交流。" : "选择一位岛上的知友，看看 TA 的公开观点。"}</p>
+          </div>
+          <div class="voyage-map-actions">
+            <button class="outline-button voyage-continue" type="button">继续探索</button>
+            <button class="outline-button primary voyage-next" type="button">换一个问题</button>
+          </div>
+        </section>
+      </div>
+    `;
+
+    document.body.append(dialog);
+    voyageState.dialog = dialog;
+    let finished = false;
+    const finish = (runNext) => {
+      if (finished) return;
+      finished = true;
+      cancelAnimationFrame(voyageState.animationFrame);
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      voyageState.dialog = null;
+      if (runNext && typeof nextAction === "function") nextAction();
+      else if (runNext && typeof restart === "function") {
+        bypassLegacyTrail = true;
+        try {
+          restart();
+        } finally {
+          setTimeout(() => { bypassLegacyTrail = false; }, 0);
+        }
+      }
+    };
+
+    dialog.querySelector(".voyage-map-close").addEventListener("click", () => finish(false));
+    dialog.querySelector(".voyage-continue").addEventListener("click", () => finish(false));
+    dialog.querySelector(".voyage-next").addEventListener("click", () => finish(true));
+    dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
+    dialog.addEventListener("click", (event) => { if (event.target === dialog) finish(false); });
+    dialog.showModal();
+    requestAnimationFrame(() => animateShip(dialog));
+  }
+
+  function animateShip(dialog) {
+    const path = dialog.querySelector(".voyage-main-route");
+    const progress = dialog.querySelector(".voyage-route-progress");
+    const ship = dialog.querySelector(".voyage-ship");
+    if (!path || !progress || !ship) return;
+    const length = path.getTotalLength();
+    progress.style.strokeDasharray = `${length} ${length}`;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      progress.style.strokeDashoffset = "0";
+      const end = path.getPointAtLength(length);
+      ship.setAttribute("transform", `translate(${end.x} ${end.y})`);
+      return;
+    }
+    const duration = Math.max(7200, length * 10.5);
+    const startedAt = performance.now();
+    const frame = (now) => {
+      if (!dialog.isConnected || !dialog.open) return;
+      const ratio = ((now - startedAt) % duration) / duration;
+      const distance = ratio * length;
+      const point = path.getPointAtLength(distance);
+      const ahead = path.getPointAtLength(Math.min(length, distance + 3));
+      const angle = Math.atan2(ahead.y - point.y, ahead.x - point.x) * 180 / Math.PI;
+      ship.setAttribute("transform", `translate(${point.x} ${point.y}) rotate(${angle})`);
+      progress.style.strokeDashoffset = String(length * (1 - ratio));
+      voyageState.animationFrame = requestAnimationFrame(frame);
+    };
+    voyageState.animationFrame = requestAnimationFrame(frame);
+  }
+
+  function ensureStyles() {
+    if (document.querySelector("#voyage-map-v2-styles")) return;
+    const style = document.createElement("style");
+    style.id = "voyage-map-v2-styles";
+    style.textContent = `
+      .voyage-launch{min-width:260px!important;background:#263f31!important;color:#fffdf5!important;border-color:#b29254!important;box-shadow:0 12px 28px rgba(35,57,45,.18)!important;font-weight:700!important;letter-spacing:.08em!important}
+      .voyage-launch::before{content:"⛵";margin-right:.55em}.voyage-launch:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(35,57,45,.25)!important}
+      .voyage-map-dialog{width:min(1240px,96vw);max-width:none;max-height:96vh;margin:auto;padding:0;border:1px solid #ad8950;border-radius:24px;background:#f6edd9;color:#223b30;box-shadow:0 32px 90px rgba(16,27,22,.48);overflow:hidden}
+      .voyage-map-dialog::backdrop{background:rgba(25,39,32,.76);backdrop-filter:blur(5px)}
+      .voyage-map-shell{position:relative;display:grid;grid-template-rows:auto minmax(390px,1fr) auto;max-height:96vh;padding:22px;background:linear-gradient(rgba(252,247,235,.92),rgba(247,238,218,.94)),radial-gradient(circle at 18% 10%,rgba(170,143,89,.18),transparent 28%);box-sizing:border-box}
+      .voyage-map-shell::before{content:"";position:absolute;inset:10px;border:1px solid rgba(151,116,58,.45);border-radius:17px;pointer-events:none}
+      .voyage-map-close{position:absolute;right:30px;top:22px;z-index:20;width:44px;height:44px;border:0;background:transparent;color:#233c31;font:300 40px/1 Georgia,serif;cursor:pointer;transition:.2s}.voyage-map-close:hover{transform:rotate(8deg);color:#99723a}
+      .voyage-map-header{position:relative;z-index:2;text-align:center;padding:3px 60px 13px}.voyage-map-header p{display:flex;align-items:center;justify-content:center;gap:16px;margin:0 0 3px;font-family:serif;font-size:15px;font-weight:700;letter-spacing:.22em}.voyage-map-header p span{width:60px;height:1px;background:#a9874f}.voyage-map-header h2{display:inline-flex;align-items:center;margin:2px 0 0;font-family:serif;font-size:clamp(30px,4vw,52px);line-height:1.08;letter-spacing:.08em}.voyage-map-header h2 i{width:46px;height:13px;margin-left:8px;border-top:3px solid #b59a63;border-radius:50%;transform:rotate(-9deg)}.voyage-map-header>strong{display:block;margin-top:6px;color:#695c42;font-family:serif;font-size:17px;letter-spacing:.14em}
+      .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:linear-gradient(rgba(250,244,230,.07),rgba(250,244,230,.07)),url("./zhilu-four-islands-v1.png");background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
+      .voyage-chart::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-radial-gradient(ellipse at center,transparent 0 56px,rgba(132,111,70,.035) 58px 59px,transparent 60px 92px);mix-blend-mode:multiply}
+      .voyage-quote{position:absolute;left:25px;top:19px;z-index:5;margin:0;color:#71664c;font:italic 14px/1.8 serif;letter-spacing:.08em}.voyage-compass{position:absolute;right:28px;top:16px;z-index:5;width:76px;height:76px;border:1px solid rgba(142,108,50,.55);border-radius:50%;color:#8c6c36;text-align:center;font:10px/1 serif}.voyage-compass::before,.voyage-compass::after{content:"";position:absolute;left:50%;top:8px;width:1px;height:60px;background:#9b7b43}.voyage-compass::after{transform:rotate(90deg)}.voyage-compass i{position:absolute;left:23px;top:23px;width:27px;height:27px;border:1px solid #99783f;transform:rotate(45deg);background:linear-gradient(135deg,#99783f 0 49%,transparent 50%)}.voyage-compass b{position:absolute;top:-13px;left:33px}.voyage-compass em{position:absolute;bottom:-14px;left:34px;font-style:normal}.voyage-compass span{position:absolute;left:-12px;top:34px;white-space:pre;word-spacing:54px}
+      .voyage-routes{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible}.voyage-branch-route{fill:none;stroke:#a47d3d;stroke-width:1.7;stroke-dasharray:7 8;opacity:.42}.voyage-main-route{fill:none;stroke:#385744;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 8;opacity:.72}.voyage-route-progress{fill:none;stroke:#c39b50;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 1px 2px rgba(54,63,43,.35))}.voyage-stop circle:first-child{fill:#f7efdb;stroke:#385744;stroke-width:3}.voyage-stop circle:nth-child(2){fill:#b6904c}.voyage-stop text{fill:#314c3d;font:700 13px serif;text-anchor:middle}.voyage-ship{filter:drop-shadow(0 5px 4px rgba(33,50,40,.32));transform-box:fill-box;transform-origin:center}.ship-hull{fill:#233f32;stroke:#f0dfb1;stroke-width:1.4}.ship-mast{fill:none;stroke:#263f32;stroke-width:2.4}.ship-sail-a{fill:#f7eed6;stroke:#263f32;stroke-width:1.3}.ship-sail-b{fill:#526b55;stroke:#263f32;stroke-width:1.2}.ship-flag{fill:#b78f48}
+      .voyage-island-label{position:absolute;z-index:6;left:calc(var(--island-x)/1100*100%);top:calc(var(--island-y)/550*100%);width:170px;min-height:84px;padding:13px 15px 12px;color:#fffef4;text-align:center;background:radial-gradient(ellipse at 50% 20%,rgba(125,144,103,.97),rgba(59,79,57,.97) 70%);border:1px solid rgba(248,232,190,.72);border-radius:44% 56% 47% 53%/55% 42% 58% 45%;box-shadow:0 9px 18px rgba(29,46,35,.26),inset 0 0 0 3px rgba(244,232,196,.12);transform:translate(-50%,-50%);animation:voyageIslandIn .5s both;animation-delay:var(--island-delay)}.voyage-island-label::before,.voyage-island-label::after{content:"";position:absolute;z-index:-1;background:#6d7c5d;border:2px solid rgba(247,234,201,.55);border-radius:50%}.voyage-island-label::before{width:22px;height:15px;left:-18px;top:42px}.voyage-island-label::after{width:15px;height:11px;right:-12px;bottom:18px}.voyage-island-icon{display:block;font:24px/1 serif;color:#fff5d5}.voyage-island-label strong{display:block;margin:2px 0;font:700 18px/1.2 serif;letter-spacing:.08em}.voyage-island-label small{display:block;max-width:145px;margin:auto;font:11px/1.35 sans-serif;opacity:.9}.voyage-island-label>span:last-child{position:absolute;right:9px;top:8px;width:18px;height:18px;border:1px solid rgba(255,255,255,.65);border-radius:50%;font:700 10px/17px sans-serif}
+      .voyage-person-card{position:absolute;z-index:9;left:calc(var(--card-x)/1100*100%);top:calc(var(--card-y)/550*100%);display:flex;align-items:center;gap:9px;width:180px;min-height:54px;padding:6px 10px 6px 6px;background:rgba(255,252,243,.94);border:1px solid rgba(166,132,76,.28);border-radius:32px;color:#263f33;box-shadow:0 6px 16px rgba(39,52,42,.2);animation:voyageCardIn .55s .25s both}.voyage-person-card.right{transform:translateX(-25%)}.voyage-person-avatar{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;overflow:hidden;border:2px solid #c6a363;border-radius:50%;background:#dce1d1;color:#39533e;font:700 18px serif}.voyage-person-avatar img{width:100%;height:100%;object-fit:cover}.voyage-person-copy{display:block;min-width:0}.voyage-person-copy strong,.voyage-person-copy small,.voyage-person-copy em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.voyage-person-copy strong{font:700 14px/1.25 serif}.voyage-person-copy small{max-width:112px;color:#665c49;font-size:10px}.voyage-person-copy em{margin-top:2px;color:#48634c;font:normal 9px/1.2 sans-serif}.voyage-person-copy em i{color:#799070;font-size:7px;margin-right:4px}
+      .voyage-question-plaque{position:absolute;z-index:8;left:50%;bottom:12px;width:min(460px,50%);padding:9px 28px 12px;text-align:center;color:#fff9e7;background:linear-gradient(180deg,#385442,#223b31);border:2px solid #bc9752;border-radius:38px 38px 24px 24px;box-shadow:0 0 0 3px #314a3a,0 0 0 5px #d2b16a,0 8px 19px rgba(28,45,35,.25);transform:translateX(-50%)}.voyage-question-plaque::before,.voyage-question-plaque::after{content:"";position:absolute;top:50%;width:30px;height:1px;background:#cfb475}.voyage-question-plaque::before{left:16px}.voyage-question-plaque::after{right:16px}.voyage-question-plaque small{display:block;color:#d8c795;font:11px/1.4 serif;letter-spacing:.18em}.voyage-question-plaque strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 20px/1.35 serif;letter-spacing:.06em}.voyage-map-note{position:absolute;z-index:7;left:18px;bottom:9px;margin:0;color:#796a4c;font:11px/1.2 serif}
+      .voyage-harvest{position:relative;z-index:3;display:grid;grid-template-columns:210px minmax(0,1fr) auto;gap:20px;align-items:center;margin-top:12px;padding:13px 12px 2px}.voyage-harvest-title{display:flex;align-items:center;gap:11px}.voyage-harvest-title>span{display:grid;place-items:center;width:40px;height:40px;border:1px solid #a78750;border-radius:50%;color:#9a773e}.voyage-harvest-title small,.voyage-harvest-title strong{display:block}.voyage-harvest-title small{color:#927341;font:700 12px serif;letter-spacing:.12em}.voyage-harvest-title strong{margin-top:2px;font:700 14px serif}.voyage-harvest-copy{min-width:0;padding-left:18px;border-left:1px solid rgba(150,117,61,.35)}.voyage-harvest-copy p{margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#5e5a4b;font-size:12px}.voyage-harvest-copy b{display:inline-block;width:54px;color:#294536;font-family:serif}.voyage-map-actions{display:flex;gap:10px}.voyage-map-actions button{min-width:126px;white-space:nowrap}
+      @keyframes voyageIslandIn{from{opacity:0;transform:translate(-50%,-44%) scale(.88)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}@keyframes voyageCardIn{from{opacity:0;filter:blur(3px)}to{opacity:1;filter:blur(0)}}
+      @media(max-width:820px){.voyage-map-dialog{width:100vw;max-height:100vh;border-radius:0}.voyage-map-shell{grid-template-rows:auto auto auto;max-height:100vh;overflow:auto;padding:14px}.voyage-map-header{padding:4px 38px 10px}.voyage-map-header h2{font-size:30px}.voyage-map-header>strong{font-size:13px}.voyage-chart{min-height:570px;background-size:auto 100%;background-position:center}.voyage-quote,.voyage-compass{display:none}.voyage-island-label{width:138px;min-height:72px;padding:9px}.voyage-island-label strong{font-size:14px}.voyage-island-label small{font-size:9px}.voyage-person-card{width:136px}.voyage-person-copy small{max-width:72px}.voyage-question-plaque{width:76%}.voyage-harvest{grid-template-columns:1fr;gap:9px}.voyage-harvest-copy{padding:8px 0 0;border-left:0;border-top:1px solid rgba(150,117,61,.35)}.voyage-harvest-copy p{white-space:normal}.voyage-map-actions{width:100%}.voyage-map-actions button{flex:1}.voyage-map-note{display:none}}
+      @media(prefers-reduced-motion:reduce){.voyage-island-label,.voyage-person-card{animation:none}.voyage-launch{transition:none}}
+      .voyage-island-label{left:var(--island-x);top:var(--island-y)}
+      .voyage-person-card{left:var(--card-x);top:var(--card-y)}
+    `;
+    document.head.append(style);
+  }
+
+  document.addEventListener("click", (event) => {
+    const restartButton = event.target.closest?.("#restartButton, #bottomRestart");
+    if (!restartButton || !state.result || !branchRecords().length) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    showVoyage(() => {
+      bypassLegacyTrail = true;
+      try {
+        restart();
+      } finally {
+        setTimeout(() => { bypassLegacyTrail = false; }, 0);
+      }
+    });
+  }, true);
+
+  if (typeof showTrail !== "undefined") showTrail = showVoyage;
+  ensureStyles();
+})();
