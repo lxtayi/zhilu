@@ -3,7 +3,8 @@ const elements = {
   input: document.querySelector("#questionInput"),
   charCount: document.querySelector("#charCount"),
   hero: document.querySelector("#heroSection"),
-  globeStage: document.querySelector("#questionGlobeStage"),
+  viewpointGate: document.querySelector("#viewpointGate"),
+  viewpointGateCards: document.querySelector("#viewpointGateCards"),
   progress: document.querySelector("#progressSection"),
   progressTitle: document.querySelector("#progressTitle"),
   progressDetail: document.querySelector("#progressDetail"),
@@ -15,6 +16,10 @@ const elements = {
   coreTension: document.querySelector("#coreTension"),
   queryPills: document.querySelector("#queryPills"),
   warningBox: document.querySelector("#warningBox"),
+  viewpoint: document.querySelector("#viewpointSection"),
+  viewpointCards: document.querySelector("#viewpointCards"),
+  viewpointMapButton: document.querySelector("#viewpointMapButton"),
+  mapSection: document.querySelector(".map-section"),
   mapTitle: document.querySelector("#mapTitle"),
   islandMap: document.querySelector("#islandMap"),
   restart: document.querySelector("#restartButton"),
@@ -139,23 +144,33 @@ async function submitQuestion(question) {
   submitButton.disabled = true;
   elements.hero.hidden = true;
   elements.results.hidden = true;
-  elements.progress.hidden = false;
+  elements.progress.hidden = true;
   elements.restart.hidden = true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  startProgress();
+  state.selectedViewpointIndex = -1;
+  showViewpointGate();
 
-  try {
-    const [response] = await Promise.all([
-      fetch("/api/explore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question })
-      }),
-      delay(1500)
-    ]);
-
+  const request = fetch("/api/explore", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question })
+  }).then(async (response) => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || "探索失败，请稍后重试。");
+    return payload;
+  });
+
+  try {
+    const payload = await request;
+    renderViewpointGate(payload.viewpoints || [], payload.clusters || []);
+    const selectedIndex = await new Promise((resolve) => { state.viewpointSelection = resolve; });
+    state.selectedViewpointIndex = selectedIndex;
+    state.viewpointSelection = null;
+    elements.viewpointGate.hidden = true;
+    document.body.classList.remove("viewpoint-mode");
+    elements.progress.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    startProgress();
+    await delay(700);
 
     stopProgress();
     state.result = payload;
@@ -167,15 +182,51 @@ async function submitQuestion(question) {
     elements.progress.hidden = true;
     elements.results.hidden = false;
     elements.restart.hidden = false;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    elements.mapSection.hidden = false;
+    await enterIsland(Math.min(selectedIndex, Math.max(0, payload.clusters.length - 1)));
+    elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     stopProgress();
     elements.progress.hidden = true;
+    elements.viewpointGate.hidden = true;
+    document.body.classList.remove("viewpoint-mode");
     elements.hero.hidden = false;
     showToast(error.message || "探索失败，请稍后重试。");
   } finally {
+    state.viewpointSelection = null;
     submitButton.disabled = false;
   }
+}
+
+function showViewpointGate() {
+  elements.viewpointGateCards.innerHTML = '<div class="viewpoint-cloud-loading">正在从知乎讨论中寻找不同的声音……</div>';
+  document.body.classList.add("viewpoint-mode");
+  elements.viewpointGate.hidden = false;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderViewpointGate(viewpoints, clusters) {
+  const fallback = clusters.flatMap((cluster, clusterIndex) => (cluster.people || []).slice(0, 2).map((person) => ({
+    id: person.quote?.evidenceId || person.id,
+    text: person.quote?.text || person.viewpoint,
+    author: { name: person.name, avatar: person.avatar, headline: person.headline },
+    clusterIndex,
+    isSynthetic: false
+  })));
+  const options = (viewpoints.length ? viewpoints : fallback).slice(0, 6);
+  elements.viewpointGateCards.innerHTML = options.length ? options.map((viewpoint) => {
+    const cluster = clusters[Number(viewpoint.clusterIndex) || 0];
+    return '<button class="viewpoint-quote-card" type="button" data-viewpoint-index="' + (Number(viewpoint.clusterIndex) || 0) + '" style="--viewpoint-color:' + safeColor(cluster?.color) + '">' +
+      '<span class="viewpoint-quote-mark" aria-hidden="true">“</span>' +
+      '<span class="viewpoint-quote-copy"><strong>' + escapeHtml(viewpoint.text) + '</strong><small>' + avatarMarkup(viewpoint.author || {}) + '<span>' + escapeHtml(viewpoint.author?.name || "知乎用户") + ' · ' + escapeHtml(viewpoint.author?.headline || "相关回答") + '</span><em>♡ ' + Number(viewpoint.voteUpCount || 0) + '</em></small></span>' +
+      '<span class="viewpoint-gate-arrow" aria-hidden="true">→</span></button>';
+  }).join("") : '<div class="viewpoint-cloud-empty">暂时没有足够可靠的观点摘录，将从完整群岛开始探索。</div>';
+
+  elements.viewpointGateCards.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.viewpointSelection) state.viewpointSelection(Number(button.dataset.viewpointIndex));
+    });
+  });
 }
 
 function saveRecentQuestion(question) {
@@ -209,8 +260,36 @@ function renderResult() {
   elements.warningBox.textContent = warnings.map((warning) => warning.message).join(" ");
 
   renderIslands();
+  elements.viewpoint.hidden = true;
   const closing = document.querySelector(".closing-section") || elements.results;
   if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束探索，查看链路树"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
+}
+
+function renderViewpointChoices() {
+  const clusters = state.result?.clusters || [];
+  elements.viewpointCards.innerHTML = clusters.map((cluster, index) => `
+    <button class="viewpoint-card" type="button" data-viewpoint-index="${index}" style="--viewpoint-color:${safeColor(cluster.color)}">
+      <span class="viewpoint-number">${String(index + 1).padStart(2, "0")}</span>
+      <span class="viewpoint-card-copy">
+        <strong>${escapeHtml(cluster.name)}</strong>
+        <span>${escapeHtml(cluster.summary || "从这个角度重新看待当前问题")}</span>
+        <small>${cluster.people?.length || 0} 位代表知友 · 进入这座岛</small>
+      </span>
+      <span class="viewpoint-arrow" aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  elements.viewpointCards.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
+    button.addEventListener("click", () => enterSelectedViewpoint(Number(button.dataset.viewpointIndex)));
+  });
+}
+
+async function enterSelectedViewpoint(index) {
+  elements.viewpoint.hidden = true;
+  elements.mapSection.hidden = false;
+  elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  await delay(180);
+  enterIsland(index);
 }
 
 const islandLayouts = {
@@ -231,9 +310,17 @@ const islandCoastlines = [
 function islandTerrainMarkup(index) {
   const coast = islandCoastlines[index % islandCoastlines.length];
   return `<svg class="island-terrain" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
-    <path class="terrain-tide terrain-tide-outer" d="${coast}" />
+    <defs>
+      <filter id="terrain-paper-${index}" x="-20%" y="-25%" width="140%" height="150%">
+        <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="${index + 4}" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" />
+      </filter>
+    </defs>
+    <g filter="url(#terrain-paper-${index})">
+      <path class="terrain-tide terrain-tide-outer" d="${coast}" />
     <path class="terrain-tide" d="${coast}" />
     <path class="terrain-sand" d="${coast}" />
+    <path class="terrain-shore" d="${coast}" />
     <path class="terrain-land" d="${coast}" />
     <g class="terrain-contours">
       <path d="M68 103Q59 66 105 64Q137 39 168 59Q220 38 247 86Q268 124 236 151Q206 177 164 160Q108 190 79 147Z" />
@@ -243,7 +330,13 @@ function islandTerrainMarkup(index) {
     <path class="terrain-lake" d="M192 122Q209 108 228 119Q245 135 228 146Q210 153 199 140Q181 139 192 122Z" />
     <g class="terrain-mountains"><path d="M92 110L128 58L166 111M133 115L164 73L195 117" /><path d="M116 75L128 58L141 78L131 73L125 82ZM153 88L164 73L175 91L165 85L160 94Z" /></g>
     <g class="terrain-trees"><path d="M73 120l-8 17h16ZM87 130l-9 19h18ZM103 143l-8 17h16ZM222 68l-8 17h16ZM238 82l-8 17h16ZM213 83l-7 15h14Z" /><path d="M73 137v6M87 149v6M103 160v5M222 85v6M238 99v6M213 98v5" /></g>
-    <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+      <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+      <g class="terrain-islets">
+        <path d="M35 72q-13-9-3-20q12-8 21 2q5 12-5 18q-7 5-13 0Z" />
+        <path d="M260 49q10-13 23-7q11 10 2 20q-12 8-23-1q-5-5-2-12Z" />
+        <path d="M274 161q12-7 20 3q6 11-5 17q-12 4-18-7q-2-8 3-13Z" />
+      </g>
+    </g>
   </svg>`;
 }
 
@@ -268,7 +361,7 @@ function renderIslands() {
   state.result.clusters.forEach((cluster, index) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `island-button island-position-${index}`;
+    button.className = `island-button island-position-${index} island-variant-${index}`;
     const [x, y] = islandLayouts[state.result.clusters.length][index];
     button.style.setProperty("--island-x", `${x}%`);
     button.style.setProperty("--island-y", `${y}%`);
@@ -558,7 +651,7 @@ function showTrail(continueExplore) {
 }
 function finishRestart() {
   if (elements.dialog.open) elements.dialog.close();
-  elements.results.hidden = true; elements.progress.hidden = true; elements.hero.hidden = false; elements.restart.hidden = true;
+  elements.results.hidden = true; elements.progress.hidden = true; elements.viewpointGate.hidden = true; document.body.classList.remove("viewpoint-mode"); elements.hero.hidden = false; elements.restart.hidden = true;
   state.result = null; state.trail = null; window.scrollTo({ top: 0, behavior: "smooth" }); elements.input.focus();
 }
 
@@ -604,6 +697,11 @@ if (elements.globeStage && window.matchMedia("(pointer:fine)").matches) {
 
 elements.restart.addEventListener("click", restart);
 elements.bottomRestart.addEventListener("click", restart);
+elements.viewpointMapButton.addEventListener("click", () => {
+  elements.viewpoint.hidden = true;
+  elements.mapSection.hidden = false;
+  elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 elements.closeDialog.addEventListener("click", () => elements.dialog.close());
 elements.dialog.addEventListener("click", (event) => {
   if (event.target === elements.dialog) elements.dialog.close();
