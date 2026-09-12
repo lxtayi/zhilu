@@ -310,9 +310,17 @@ const islandCoastlines = [
 function islandTerrainMarkup(index) {
   const coast = islandCoastlines[index % islandCoastlines.length];
   return `<svg class="island-terrain" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
-    <path class="terrain-tide terrain-tide-outer" d="${coast}" />
+    <defs>
+      <filter id="terrain-paper-${index}" x="-20%" y="-25%" width="140%" height="150%">
+        <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="${index + 4}" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" />
+      </filter>
+    </defs>
+    <g filter="url(#terrain-paper-${index})">
+      <path class="terrain-tide terrain-tide-outer" d="${coast}" />
     <path class="terrain-tide" d="${coast}" />
     <path class="terrain-sand" d="${coast}" />
+    <path class="terrain-shore" d="${coast}" />
     <path class="terrain-land" d="${coast}" />
     <g class="terrain-contours">
       <path d="M68 103Q59 66 105 64Q137 39 168 59Q220 38 247 86Q268 124 236 151Q206 177 164 160Q108 190 79 147Z" />
@@ -322,7 +330,13 @@ function islandTerrainMarkup(index) {
     <path class="terrain-lake" d="M192 122Q209 108 228 119Q245 135 228 146Q210 153 199 140Q181 139 192 122Z" />
     <g class="terrain-mountains"><path d="M92 110L128 58L166 111M133 115L164 73L195 117" /><path d="M116 75L128 58L141 78L131 73L125 82ZM153 88L164 73L175 91L165 85L160 94Z" /></g>
     <g class="terrain-trees"><path d="M73 120l-8 17h16ZM87 130l-9 19h18ZM103 143l-8 17h16ZM222 68l-8 17h16ZM238 82l-8 17h16ZM213 83l-7 15h14Z" /><path d="M73 137v6M87 149v6M103 160v5M222 85v6M238 99v6M213 98v5" /></g>
-    <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+      <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+      <g class="terrain-islets">
+        <path d="M35 72q-13-9-3-20q12-8 21 2q5 12-5 18q-7 5-13 0Z" />
+        <path d="M260 49q10-13 23-7q11 10 2 20q-12 8-23-1q-5-5-2-12Z" />
+        <path d="M274 161q12-7 20 3q6 11-5 17q-12 4-18-7q-2-8 3-13Z" />
+      </g>
+    </g>
   </svg>`;
 }
 
