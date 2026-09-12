@@ -209,33 +209,76 @@ function renderResult() {
 
   renderIslands();
   const closing = document.querySelector(".closing-section") || elements.results;
-  if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束本次探索 · 生成航线"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
+  if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束探索，查看链路树"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
+}
+
+const islandLayouts = {
+  1: [[50, 50]],
+  2: [[25, 50], [75, 50]],
+  3: [[50, 22], [25, 76], [75, 76]],
+  4: [[25, 22], [75, 22], [25, 78], [75, 78]],
+  5: [[25, 20], [75, 20], [25, 80], [75, 80], [50, 50]]
+};
+
+// Local vector terrain: shared by each overview island and its detail scene.
+const islandCoastlines = [
+  "M45 111Q19 86 51 66Q47 36 85 44Q109 16 141 36Q174 16 190 43Q233 27 245 57Q284 53 277 85Q308 110 274 130Q286 163 249 166Q227 198 195 177Q159 207 137 184Q97 205 82 175Q41 181 49 147Q22 136 45 111Z",
+  "M39 110Q15 69 61 62Q70 28 104 42Q125 13 157 35Q202 17 222 47Q266 33 273 75Q308 95 281 124Q296 156 256 166Q249 199 211 181Q179 207 154 179Q111 203 96 175Q58 190 49 154Q23 147 39 110Z",
+  "M47 118Q21 92 48 73Q37 41 83 48Q93 19 128 40Q158 16 181 40Q215 23 235 52Q280 47 270 83Q303 110 276 138Q279 171 237 168Q219 205 184 180Q150 201 126 179Q84 196 79 169Q36 168 47 142Q27 129 47 118Z"
+];
+
+function islandTerrainMarkup(index) {
+  const coast = islandCoastlines[index % islandCoastlines.length];
+  return `<svg class="island-terrain" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
+    <path class="terrain-tide terrain-tide-outer" d="${coast}" />
+    <path class="terrain-tide" d="${coast}" />
+    <path class="terrain-sand" d="${coast}" />
+    <path class="terrain-land" d="${coast}" />
+    <g class="terrain-contours">
+      <path d="M68 103Q59 66 105 64Q137 39 168 59Q220 38 247 86Q268 124 236 151Q206 177 164 160Q108 190 79 147Z" />
+      <path d="M91 106Q77 82 117 83Q150 54 181 78Q221 63 232 105Q248 139 208 144Q175 164 145 146Q99 166 91 132Z" />
+      <path d="M113 112Q107 90 140 97Q162 76 188 98Q218 99 211 124Q178 148 154 132Q129 145 113 112Z" />
+    </g>
+    <path class="terrain-lake" d="M192 122Q209 108 228 119Q245 135 228 146Q210 153 199 140Q181 139 192 122Z" />
+    <g class="terrain-mountains"><path d="M92 110L128 58L166 111M133 115L164 73L195 117" /><path d="M116 75L128 58L141 78L131 73L125 82ZM153 88L164 73L175 91L165 85L160 94Z" /></g>
+    <g class="terrain-trees"><path d="M73 120l-8 17h16ZM87 130l-9 19h18ZM103 143l-8 17h16ZM222 68l-8 17h16ZM238 82l-8 17h16ZM213 83l-7 15h14Z" /><path d="M73 137v6M87 149v6M103 160v5M222 85v6M238 99v6M213 98v5" /></g>
+    <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+  </svg>`;
+}
+
+function mapRoutesMarkup(positions) {
+  const count = positions.length;
+  const edges = count === 5 ? [[4, 0], [4, 1], [4, 2], [4, 3]]
+    : count === 4 ? [[0, 1], [0, 2], [1, 3]]
+    : count === 3 ? [[0, 1], [0, 2]] : count === 2 ? [[0, 1]] : [];
+  return `<svg class="map-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">${edges.map(([from, to]) => {
+    const [x1, y1] = positions[from];
+    const [x2, y2] = positions[to];
+    return `<path d="M${x1} ${y1} Q${(x1 + x2) / 2 + 3} ${(y1 + y2) / 2 - 3} ${x2} ${y2}" />`;
+  }).join("")}</svg>`;
 }
 
 function renderIslands() {
-  elements.mapTitle.textContent = "四座岛，四种看待问题的方式";
-  elements.islandMap.className = "island-map";
-  elements.islandMap.innerHTML = `
-    <div class="map-center-note" aria-hidden="true">
-      <span>沿问题启航</span>
-      <strong>四种方向<br>四群具体的人</strong>
-    </div>
-  `;
+  elements.mapTitle.textContent = `${state.result.clusters.length} 座可探索的观点岛`;
+  elements.islandMap.className = "island-map island-layout";
+  elements.islandMap.dataset.islandCount = String(state.result.clusters.length);
+  elements.islandMap.innerHTML = `${mapRoutesMarkup(islandLayouts[state.result.clusters.length])}
+    <span class="map-compass" aria-hidden="true"><small>N</small>✧</span>`;
   state.result.clusters.forEach((cluster, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `island-button island-position-${index}`;
+    const [x, y] = islandLayouts[state.result.clusters.length][index];
+    button.style.setProperty("--island-x", `${x}%`);
+    button.style.setProperty("--island-y", `${y}%`);
     button.style.setProperty("--island-color", safeColor(cluster.color));
     button.setAttribute("aria-label", `探索${cluster.name}，${cluster.people?.length || 0} 位代表知友`);
     button.innerHTML = `
+      ${islandTerrainMarkup(index)}
       <span class="island-label">
-        <span class="island-number">ISLAND ${String(index + 1).padStart(2, "0")}</span>
+        <span class="island-marker" aria-hidden="true"></span>
         <strong>${escapeHtml(cluster.name)}</strong>
-        <span class="island-rule"></span>
-        <small>${escapeHtml(cluster.summary)}</small>
-        <span class="island-count">${Number(cluster.contentCount || cluster.evidenceIds?.length || 0)} 条线索 · ${cluster.people?.length || 0} 位知友</span>
       </span>
-      <span class="island-marker" aria-hidden="true"></span>
     `;
     button.addEventListener("click", () => enterIsland(index));
     elements.islandMap.append(button);
@@ -269,10 +312,11 @@ function renderIslandScene(index) {
   const color = safeColor(cluster.color);
   const people = cluster.people || [];
   elements.mapTitle.textContent = `${cluster.name} · 点击头像认识岛上的人`;
-  elements.islandMap.className = `island-map island-scene focus-${index}`;
+  elements.islandMap.className = "island-map island-scene";
   elements.islandMap.style.setProperty("--scene-color", color);
   elements.islandMap.innerHTML = `
-    <button class="map-back-button" type="button" aria-label="返回四岛地图">
+    <div class="scene-terrain" aria-hidden="true">${islandTerrainMarkup(index)}</div>
+    <button class="map-back-button" type="button" aria-label="返回群岛地图">
       <span aria-hidden="true">←</span> 返回群岛
     </button>
     <div class="island-scene-heading">
@@ -290,6 +334,7 @@ function renderIslandScene(index) {
 
   if (!people.length) {
     layer.innerHTML = '<div class="map-empty-person">这座岛暂时没有足够可靠的人物线索。</div>';
+    requestAnimationFrame(() => elements.islandMap.classList.add("scene-ready"));
     return;
   }
 
@@ -554,12 +599,11 @@ checkHealth();
   };
   let bypassLegacyTrail = false;
 
-  const layouts = [
-    { x: 245, y: 170, cardX: 46, cardY: 80, align: "left" },
-    { x: 842, y: 174, cardX: 734, cardY: 78, align: "right" },
-    { x: 270, y: 406, cardX: 50, cardY: 326, align: "left" },
-    { x: 832, y: 407, cardX: 724, cardY: 330, align: "right" }
-  ];
+  function layoutFor(record) {
+    const count = state.result?.clusters?.length || 1;
+    const [x, y] = islandLayouts[count]?.[record.index] || [50, 50];
+    return { x: x * 11, y: (12 + y * .66) * 5.5 };
+  }
 
   function resetVoyage() {
     voyageState.islands.clear();
@@ -687,7 +731,7 @@ checkHealth();
   }
 
   function avatarFor(person) {
-    const raw = person?.avatar?.url || person?.avatarUrl || person?.avatar_url || "";
+    const raw = (typeof person?.avatar === "string" ? person.avatar : person?.avatar?.url) || person?.avatarUrl || person?.avatar_url || "";
     const url = raw && typeof safeAvatarUrl === "function" ? safeAvatarUrl(raw) : "";
     if (url) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
     return `<span aria-hidden="true">${initials(person?.name)}</span>`;
@@ -695,14 +739,12 @@ checkHealth();
 
   function personCards(records) {
     const cards = [];
-    records.forEach((record, islandOrder) => {
+    records.forEach((record) => {
       const people = record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {});
-      people.slice(0, 2).forEach((person, personIndex) => {
-        const layout = layouts[record.index % layouts.length] || layouts[islandOrder % layouts.length];
-        const offsetY = personIndex * 62;
+      people.forEach((person) => {
         const status = person.profileOpened ? "已点击主页" : "已查看人物";
         cards.push(`
-          <article class="voyage-person-card ${layout.align}" style="--card-x:${(layout.cardX / 11).toFixed(2)}%;--card-y:${((layout.cardY + offsetY) / 5.5).toFixed(2)}%">
+          <article class="voyage-person-card" style="--person-color:${safeColor(record.cluster?.color)}">
             <span class="voyage-person-avatar">${avatarFor(person)}</span>
             <span class="voyage-person-copy">
               <strong>${escapeHtml(person.name || "知乎知友")}</strong>
@@ -719,10 +761,10 @@ checkHealth();
   function islandCards(records) {
     return records.map((record, order) => {
       const cluster = record.cluster || {};
-      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      const layout = layoutFor(record);
       return `
-        <article class="voyage-island-label" style="--island-x:${(layout.x / 11).toFixed(2)}%;--island-y:${(layout.y / 5.5).toFixed(2)}%;--island-delay:${order * 90}ms">
-          <span class="voyage-island-icon" aria-hidden="true">${order === records.length - 1 ? "⚑" : "⌁"}</span>
+        <article class="voyage-island-label" style="--island-x:${(layout.x / 11).toFixed(2)}%;--island-y:${(layout.y / 5.5).toFixed(2)}%;--island-delay:${order * 90}ms;--island-color:${safeColor(cluster.color)}">
+          ${islandTerrainMarkup(record.index)}
           <strong>${escapeHtml(cluster.name || `观点岛 ${order + 1}`)}</strong>
           <small>${escapeHtml(cluster.summary || "从不同的视角看见更多可能")}</small>
           <span>${order + 1}</span>
@@ -746,11 +788,11 @@ checkHealth();
     if (voyageState.dialog?.open) voyageState.dialog.close();
     ensureStyles();
 
-    const visited = records.slice(0, 4);
+    const visited = records.slice(0, 5);
     const people = visited.flatMap((record) => record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {}));
     const start = { x: 550, y: 510 };
     const routePoints = [start, ...visited.map((record, order) => {
-      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      const layout = layoutFor(record);
       return { x: layout.x, y: layout.y };
     })];
     const mainPath = routePath(routePoints);
@@ -790,7 +832,6 @@ checkHealth();
             </g>
           </svg>
           ${islandCards(visited)}
-          ${personCards(visited)}
           <div class="voyage-question-plaque">
             <small>本次问题</small>
             <strong>${escapeHtml(question)}</strong>
@@ -798,6 +839,7 @@ checkHealth();
           <p class="voyage-map-note">演示航线 · 仅展示本次点击记录</p>
         </section>
 
+        <section class="voyage-people" aria-label="本次查看的人物">${personCards(visited)}</section>
         <section class="voyage-harvest">
           <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong></div></div>
           <div class="voyage-harvest-copy">
@@ -887,7 +929,7 @@ checkHealth();
       .voyage-map-shell::before{content:"";position:absolute;inset:10px;border:1px solid rgba(151,116,58,.45);border-radius:17px;pointer-events:none}
       .voyage-map-close{position:absolute;right:30px;top:22px;z-index:20;width:44px;height:44px;border:0;background:transparent;color:#233c31;font:300 40px/1 Georgia,serif;cursor:pointer;transition:.2s}.voyage-map-close:hover{transform:rotate(8deg);color:#99723a}
       .voyage-map-header{position:relative;z-index:2;text-align:center;padding:3px 60px 13px}.voyage-map-header p{display:flex;align-items:center;justify-content:center;gap:16px;margin:0 0 3px;font-family:serif;font-size:15px;font-weight:700;letter-spacing:.22em}.voyage-map-header p span{width:60px;height:1px;background:#a9874f}.voyage-map-header h2{display:inline-flex;align-items:center;margin:2px 0 0;font-family:serif;font-size:clamp(30px,4vw,52px);line-height:1.08;letter-spacing:.08em}.voyage-map-header h2 i{width:46px;height:13px;margin-left:8px;border-top:3px solid #b59a63;border-radius:50%;transform:rotate(-9deg)}.voyage-map-header>strong{display:block;margin-top:6px;color:#695c42;font-family:serif;font-size:17px;letter-spacing:.14em}
-      .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:linear-gradient(rgba(250,244,230,.07),rgba(250,244,230,.07)),url("./zhilu-four-islands-v1.png");background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
+      .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:radial-gradient(ellipse at center,rgba(198,216,202,.38),transparent 68%);background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
       .voyage-chart::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-radial-gradient(ellipse at center,transparent 0 56px,rgba(132,111,70,.035) 58px 59px,transparent 60px 92px);mix-blend-mode:multiply}
       .voyage-quote{position:absolute;left:25px;top:19px;z-index:5;margin:0;color:#71664c;font:italic 14px/1.8 serif;letter-spacing:.08em}.voyage-compass{position:absolute;right:28px;top:16px;z-index:5;width:76px;height:76px;border:1px solid rgba(142,108,50,.55);border-radius:50%;color:#8c6c36;text-align:center;font:10px/1 serif}.voyage-compass::before,.voyage-compass::after{content:"";position:absolute;left:50%;top:8px;width:1px;height:60px;background:#9b7b43}.voyage-compass::after{transform:rotate(90deg)}.voyage-compass i{position:absolute;left:23px;top:23px;width:27px;height:27px;border:1px solid #99783f;transform:rotate(45deg);background:linear-gradient(135deg,#99783f 0 49%,transparent 50%)}.voyage-compass b{position:absolute;top:-13px;left:33px}.voyage-compass em{position:absolute;bottom:-14px;left:34px;font-style:normal}.voyage-compass span{position:absolute;left:-12px;top:34px;white-space:pre;word-spacing:54px}
       .voyage-routes{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible}.voyage-branch-route{fill:none;stroke:#a47d3d;stroke-width:1.7;stroke-dasharray:7 8;opacity:.42}.voyage-main-route{fill:none;stroke:#385744;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 8;opacity:.72}.voyage-route-progress{fill:none;stroke:#c39b50;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 1px 2px rgba(54,63,43,.35))}.voyage-stop circle:first-child{fill:#f7efdb;stroke:#385744;stroke-width:3}.voyage-stop circle:nth-child(2){fill:#b6904c}.voyage-stop text{fill:#314c3d;font:700 13px serif;text-anchor:middle}.voyage-ship{filter:drop-shadow(0 5px 4px rgba(33,50,40,.32));transform-box:fill-box;transform-origin:center}.ship-hull{fill:#233f32;stroke:#f0dfb1;stroke-width:1.4}.ship-mast{fill:none;stroke:#263f32;stroke-width:2.4}.ship-sail-a{fill:#f7eed6;stroke:#263f32;stroke-width:1.3}.ship-sail-b{fill:#526b55;stroke:#263f32;stroke-width:1.2}.ship-flag{fill:#b78f48}
