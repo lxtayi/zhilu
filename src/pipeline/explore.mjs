@@ -1,5 +1,5 @@
 import { buildQuestionAnalysis } from "../lib/search-queries.mjs";
-import { clusterContents } from "../lib/clusters.mjs";
+import { clusterContents, themeFallbackClusters } from "../lib/clusters.mjs";
 import { dedupeContents } from "../lib/normalize.mjs";
 import { cleanQuestion } from "../lib/text.mjs";
 import {
@@ -39,7 +39,7 @@ export async function exploreQuestion(input) {
     return buildDemoExploreResult(question, analysis);
   }
 
-  // 赛事账号额度较小。每个问题只请求一次，观点拆分在本地完成。
+  // 赛事账号额度较小。每个问题只请求一次知乎搜索，随后批量分类。
   const { items: rawItems, warnings } = await searchManyZhihu(analysis.searchQueries.slice(0, 1));
   const evidence = dedupeContents(rawItems).slice(0, 24);
 
@@ -58,14 +58,23 @@ export async function exploreQuestion(input) {
     };
   }
 
+  const { classifyContents } = await import("../services/llm-clustering.mjs");
+  const classification = await classifyContents({
+    question,
+    items: evidence.map(({ id, title, excerpt }) => ({ id, title, excerpt }))
+  });
+  const combinedWarnings = [...warnings, ...classification.warnings];
+
   return {
     question,
     analysis,
-    clusters: clusterContents(evidence, question),
+    clusters: classification.status === "succeeded"
+      ? clusterContents(evidence, question, { dynamicIslands: classification.islands })
+      : themeFallbackClusters(question, clusterContents(evidence, question)),
     evidence,
-    status: warnings.length ? "partial" : "succeeded",
+    status: combinedWarnings.length || classification.status !== "succeeded" ? "partial" : "succeeded",
     mode: "live",
-    warnings
+    warnings: combinedWarnings
   };
 }
 
