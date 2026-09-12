@@ -3,6 +3,7 @@ const elements = {
   input: document.querySelector("#questionInput"),
   charCount: document.querySelector("#charCount"),
   hero: document.querySelector("#heroSection"),
+  globeStage: document.querySelector("#questionGlobeStage"),
   progress: document.querySelector("#progressSection"),
   progressTitle: document.querySelector("#progressTitle"),
   progressDetail: document.querySelector("#progressDetail"),
@@ -346,18 +347,21 @@ function renderIslandScene(index) {
     node.setAttribute("aria-label", `查看${person.name}的观点`);
     node.innerHTML = `
       <span class="map-person-anchor">
-        ${avatarMarkup(person)}
+        <span class="portrait-frame">${avatarMarkup(person)}</span>
         <span class="map-person-name">
+          <span class="person-card-kicker">岛上知友 · ${String(personIndex + 1).padStart(2, "0")}</span>
           <strong class="person-name">${escapeHtml(person.name)}</strong>
           <small>${escapeHtml(person.recommendationType || "值得了解")}</small>
-          <span>${escapeHtml(person.viewpoint)}</span>
+          <span class="person-viewpoint">${escapeHtml(person.viewpoint)}</span>
         </span>
+        <i class="person-seal" aria-hidden="true">见</i>
       </span>
       <span class="map-person-thought">
+        <span class="scroll-ribbon">一纸知友名帖</span>
         <em>${escapeHtml(person.headline || "相关内容作者")}</em>
         <strong>${escapeHtml(person.viewpoint)}</strong>
         <q>${escapeHtml(person.quote?.text || "从公开内容继续了解 TA 的判断")}</q>
-        <small>点击查看原文证据与破冰话术 →</small>
+        <small>点击展开名帖，查看原文与破冰话术</small>
       </span>
     `;
     node.addEventListener("click", () => openPerson(person, cluster, color));
@@ -386,21 +390,27 @@ async function openPerson(person, cluster, color) {
 
   elements.personContent.innerHTML = `
     <div class="dialog-body" style="--person-color:${color}">
+      <div class="dialog-scroll-title">
+        <span>PERSON NOTE · 知友名帖</span>
+        <i aria-hidden="true"></i>
+        <strong>循其言，知其人</strong>
+      </div>
       <div class="dialog-person">
-        ${avatarMarkup(person)}
+        <span class="dialog-portrait">${avatarMarkup(person)}</span>
         <div>
           <h2>${escapeHtml(person.name)}</h2>
           <p>${escapeHtml(person.headline || "相关内容作者")} · ${escapeHtml(cluster.name)}</p>
         </div>
+        <span class="dialog-seal" aria-hidden="true">知<br>路</span>
       </div>
 
       <section class="dialog-section">
-        <h3>为什么推荐 TA</h3>
+        <h3><span>壹</span> 缘何相荐</h3>
         <div class="reason-box"><p>${escapeHtml(person.connectionReason)}</p></div>
       </section>
 
       <section class="dialog-section">
-        <h3>来自公开内容的交流起点</h3>
+        <h3><span>贰</span> 原文为证</h3>
         <div class="quote-box">
           <blockquote>“${escapeHtml(person.quote?.text || evidence?.excerpt || "暂无可引用内容")}”</blockquote>
           <cite>${escapeHtml(evidence?.title || "内容来源整理中")}${evidence?.isSynthetic ? " · 演示内容" : " · 内容节选"}</cite>
@@ -573,8 +583,24 @@ document.querySelectorAll("[data-question]").forEach((button) => {
     elements.input.value = button.dataset.question;
     updateCharCount();
     elements.input.focus();
+    elements.globeStage?.classList.add("question-selected");
+    window.setTimeout(() => elements.globeStage?.classList.remove("question-selected"), 650);
   });
 });
+
+if (elements.globeStage && window.matchMedia("(pointer:fine)").matches) {
+  elements.globeStage.addEventListener("pointermove", (event) => {
+    const bounds = elements.globeStage.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+    const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+    elements.globeStage.style.setProperty("--globe-tilt-x", `${(-y * 9).toFixed(2)}deg`);
+    elements.globeStage.style.setProperty("--globe-tilt-y", `${(x * 11).toFixed(2)}deg`);
+  });
+  elements.globeStage.addEventListener("pointerleave", () => {
+    elements.globeStage.style.removeProperty("--globe-tilt-x");
+    elements.globeStage.style.removeProperty("--globe-tilt-y");
+  });
+}
 
 elements.restart.addEventListener("click", restart);
 elements.bottomRestart.addEventListener("click", restart);
