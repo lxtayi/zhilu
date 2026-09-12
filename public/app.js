@@ -588,10 +588,22 @@ checkHealth();
     record.people.set(key, person);
   }
 
+  function returnToSearch() {
+    bypassLegacyTrail = true;
+    try {
+      restart();
+    } finally {
+      setTimeout(() => { bypassLegacyTrail = false; }, 0);
+    }
+  }
+
   function ensureTrigger() {
     const host = document.querySelector(".closing-section") || elements.results;
     if (!host) return;
-    let button = host.querySelector(".voyage-launch, .trail-trigger, .trail");
+    host.querySelectorAll("button.trail-trigger, button.trail").forEach((legacyButton) => {
+      if (!legacyButton.classList.contains("voyage-launch")) legacyButton.remove();
+    });
+    let button = host.querySelector("button.voyage-launch");
     if (!button) {
       button = document.createElement("button");
       const restartButton = host.querySelector("#bottomRestart");
@@ -820,14 +832,7 @@ checkHealth();
       dialog.remove();
       voyageState.dialog = null;
       if (runNext && typeof nextAction === "function") nextAction();
-      else if (runNext && typeof restart === "function") {
-        bypassLegacyTrail = true;
-        try {
-          restart();
-        } finally {
-          setTimeout(() => { bypassLegacyTrail = false; }, 0);
-        }
-      }
+      else if (runNext) returnToSearch();
     };
 
     dialog.querySelector(".voyage-map-close").addEventListener("click", () => finish(false));
@@ -902,17 +907,10 @@ checkHealth();
 
   document.addEventListener("click", (event) => {
     const restartButton = event.target.closest?.("#restartButton, #bottomRestart");
-    if (!restartButton || !state.result || !branchRecords().length) return;
+    if (!restartButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    showVoyage(() => {
-      bypassLegacyTrail = true;
-      try {
-        restart();
-      } finally {
-        setTimeout(() => { bypassLegacyTrail = false; }, 0);
-      }
-    });
+    returnToSearch();
   }, true);
 
   if (typeof showTrail !== "undefined") showTrail = showVoyage;
