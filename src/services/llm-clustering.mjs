@@ -147,7 +147,7 @@ export async function classifyContents(
     const parsed = JSON.parse(choice.message.content);
     const islands = validateIslands(parsed?.islands, items);
     if (!islands) {
-      return fail("LLM_INVALID_RESPONSE", "动态岛结构或内容归属无效，将使用固定四岛规则。");
+      return fail("LLM_INVALID_RESPONSE", "动态岛结构或内容归属无效：模型必须让每条知乎内容恰好归属一个岛，不能漏项或重复；将使用固定四岛规则。");
     }
     return result("succeeded", limitIslands(islands, items), []);
   } catch (error) {

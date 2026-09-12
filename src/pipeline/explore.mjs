@@ -2,6 +2,7 @@ import { buildQuestionAnalysis } from "../lib/search-queries.mjs";
 import { clusterContents, themeFallbackClusters } from "../lib/clusters.mjs";
 import { dedupeContents } from "../lib/normalize.mjs";
 import { cleanQuestion } from "../lib/text.mjs";
+import { buildViewpoints } from "../lib/viewpoints.mjs";
 import {
   hasZhihuSearchCredential,
   searchManyZhihu
@@ -64,17 +65,26 @@ export async function exploreQuestion(input) {
     items: evidence.map(({ id, title, excerpt }) => ({ id, title, excerpt }))
   });
   const combinedWarnings = [...warnings, ...classification.warnings];
+  const clusters = classification.status === "succeeded"
+    ? clusterContents(evidence, question, { dynamicIslands: classification.islands })
+    : themeFallbackClusters(question, clusterContents(evidence, question));
 
   return {
     question,
     analysis,
-    clusters: classification.status === "succeeded"
-      ? clusterContents(evidence, question, { dynamicIslands: classification.islands })
-      : themeFallbackClusters(question, clusterContents(evidence, question)),
+    clusters,
+    viewpoints: buildViewpoints(evidence, clusters),
     evidence,
     status: combinedWarnings.length || classification.status !== "succeeded" ? "partial" : "succeeded",
     mode: "live",
-    warnings: combinedWarnings
+    warnings: combinedWarnings,
+    diagnostics: {
+      classification: {
+        status: classification.status,
+        ...(classification.meta || {}),
+        warningCodes: classification.warnings.map((warning) => warning.code)
+      }
+    }
   };
 }
 

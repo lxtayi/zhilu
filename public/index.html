@@ -36,7 +36,7 @@
         </div>
 
         <form id="questionForm" class="question-card">
-          <label for="questionInput">你最近在认真思考什么？</label>
+          <label for="questionInput">写下你的问题</label><p class="question-hint">我们会从知乎真实讨论中，为你寻找不同立场的人。</p>
           <div class="input-wrap">
             <textarea
               id="questionInput"
@@ -49,6 +49,7 @@
             >技术转 AI 产品值得吗？</textarea>
             <span id="charCount" class="char-count">14 / 100</span>
           </div>
+          <p class="explore-preview">预计发现 4 座观点岛 · 18 位相关讨论者 <span aria-hidden="true">→</span></p>
           <button class="primary-button" type="submit">
             <span>开始探索</span>
             <span aria-hidden="true">→</span>
@@ -69,6 +70,17 @@
           <span>没有唯一航线，也没有标准答案</span>
           <i></i>
           <span>先看见不同判断，再决定想和谁聊聊</span>
+        </div>
+      </section>
+
+      <section id="viewpointGate" class="viewpoint-gate shell" hidden aria-labelledby="viewpointGateTitle">
+        <div class="viewpoint-gate-inner">
+          <div class="viewpoint-gate-copy">
+            <p class="eyebrow">知路群岛 · 观点云</p>
+            <h2 id="viewpointGateTitle">先听见一些真实的声音</h2>
+            <p class="viewpoint-gate-note">这些话来自正在讨论同一个问题的人。挑一句最让你停留的话，从 TA 所在的岛屿开始探索。</p>
+          </div>
+          <div id="viewpointGateCards" class="viewpoint-gate-cards"></div>
         </div>
       </section>
 
@@ -111,6 +123,16 @@
         </div>
 
         <div id="warningBox" class="warning-box" hidden></div>
+
+        <section id="viewpointSection" class="viewpoint-section" aria-labelledby="viewpointTitle">
+          <div class="viewpoint-intro">
+            <p class="eyebrow">先选择你的航向</p>
+            <h3 id="viewpointTitle">进入地图前，你更接近哪一种观点？</h3>
+            <p>没有标准答案。先选一个你此刻最认同的判断，我们会把你带到对应的岛屿；之后也可以返回群岛，看看其他立场。</p>
+          </div>
+          <div id="viewpointCards" class="viewpoint-cards"></div>
+          <button id="viewpointMapButton" class="outline-button viewpoint-map-button" type="button">先看完整群岛，再决定</button>
+        </section>
 
         <section class="map-section" aria-labelledby="mapTitle">
           <div class="section-title-row">
