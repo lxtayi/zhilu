@@ -208,7 +208,7 @@ function renderResult() {
   elements.warningBox.textContent = warnings.map((warning) => warning.message).join(" ");
 
   renderIslands();
-  const closing = document.querySelector(".closing-section");
+  const closing = document.querySelector(".closing-section") || elements.results;
   if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束本次探索 · 生成航线"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
 }
 
