@@ -801,6 +801,14 @@ checkHealth();
       </div>
     `;
 
+    const sourceMapBackground = elements.islandMap
+      ? getComputedStyle(elements.islandMap).backgroundImage
+      : "";
+    if (sourceMapBackground && sourceMapBackground !== "none") {
+      dialog.querySelector(".voyage-chart").style.backgroundImage =
+        `linear-gradient(rgba(250,244,230,.07),rgba(250,244,230,.07)),${sourceMapBackground}`;
+    }
+
     document.body.append(dialog);
     voyageState.dialog = dialog;
     let finished = false;
@@ -868,7 +876,7 @@ checkHealth();
     style.textContent = `
       .voyage-launch{min-width:260px!important;background:#263f31!important;color:#fffdf5!important;border-color:#b29254!important;box-shadow:0 12px 28px rgba(35,57,45,.18)!important;font-weight:700!important;letter-spacing:.08em!important}
       .voyage-launch::before{content:"⛵";margin-right:.55em}.voyage-launch:hover{transform:translateY(-2px);box-shadow:0 16px 32px rgba(35,57,45,.25)!important}
-      .voyage-map-dialog{width:min(1240px,96vw);max-width:none;max-height:96vh;margin:auto;padding:0;border:1px solid #ad8950;border-radius:24px;background:#f6edd9;color:#223b30;box-shadow:0 32px 90px rgba(16,27,22,.48);overflow:hidden}
+      .voyage-map-dialog{width:min(1240px,96vw);max-width:none;max-height:96vh;margin:auto;padding:0;border:1px solid #ad8950;border-radius:24px;background:#f6edd9;color:#223b30;box-shadow:0 32px 90px rgba(16,27,22,.48);overflow:auto}
       .voyage-map-dialog::backdrop{background:rgba(25,39,32,.76);backdrop-filter:blur(5px)}
       .voyage-map-shell{position:relative;display:grid;grid-template-rows:auto minmax(390px,1fr) auto;max-height:96vh;padding:22px;background:linear-gradient(rgba(252,247,235,.92),rgba(247,238,218,.94)),radial-gradient(circle at 18% 10%,rgba(170,143,89,.18),transparent 28%);box-sizing:border-box}
       .voyage-map-shell::before{content:"";position:absolute;inset:10px;border:1px solid rgba(151,116,58,.45);border-radius:17px;pointer-events:none}
@@ -887,6 +895,7 @@ checkHealth();
       @media(prefers-reduced-motion:reduce){.voyage-island-label,.voyage-person-card{animation:none}.voyage-launch{transition:none}}
       .voyage-island-label{left:var(--island-x);top:var(--island-y)}
       .voyage-person-card{left:var(--card-x);top:var(--card-y)}
+      @media(max-height:820px) and (min-width:821px){.voyage-map-shell{grid-template-rows:auto minmax(360px,1fr) auto;padding:14px}.voyage-map-header{padding-bottom:7px}.voyage-map-header h2{font-size:38px}.voyage-map-header>strong{font-size:14px}.voyage-chart{min-height:410px}.voyage-harvest{margin-top:8px;padding-top:9px}}
     `;
     document.head.append(style);
   }
