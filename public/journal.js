@@ -61,3 +61,4 @@ $('#navJournal').onclick=()=>open(null,false,'mine');
 $('#enterJournal').onclick=()=>open(null,false);
 $('#closeJournalPanel').onclick=()=>$('#journalPanel').close();
 })();
+

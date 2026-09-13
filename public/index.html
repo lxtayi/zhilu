@@ -13,7 +13,7 @@
     <div class="ambient ambient-two"></div>
 
     <header class="site-header">
-      <a class="brand" href="/" aria-label="知路首页">
+      <a class="brand" href="./index.html" aria-label="知路首页">
         <span class="brand-mark">知</span>
         <span class="brand-name">知路</span>
         <span class="brand-divider"></span>
@@ -112,8 +112,8 @@
         <div class="viewpoint-gate-inner">
           <div class="viewpoint-gate-copy">
             <p class="eyebrow">知路群岛 · 观点云</p>
-            <h2 id="viewpointGateTitle">先听见一些真实的声音</h2>
-            <p class="viewpoint-gate-note">这些话来自正在讨论同一个问题的人。挑一句最让你停留的话，从 TA 所在的岛屿开始探索。</p>
+            <h2 id="viewpointGateTitle">先遇见几种真实的选择</h2>
+            <p class="viewpoint-gate-note">每个问题对应一座观点岛。选择你最想弄清楚的一项，去看看相关的观点与经历。</p>
           </div>
           <div id="viewpointGateCards" class="viewpoint-gate-cards"></div>
         </div>
@@ -144,16 +144,9 @@
             <h2 id="resultQuestion"></h2>
           </div>
           <span id="resultMode" class="result-mode"></span>
-        </div>
-
-        <div class="analysis-strip">
-          <div>
-            <span class="mini-label">核心矛盾</span>
-            <p id="coreTension"></p>
-          </div>
-          <div>
+        </div>`n<div>
             <span class="mini-label">搜索路径</span>
-            <div id="queryPills" class="query-pills"></div>
+            <div id="queryPills" class="query-pills" hidden></div>
           </div>
         </div>
 
@@ -178,6 +171,7 @@
             <p>点击岛屿进入场景，岛上的头像就是值得认识的人</p>
           </div>
           <div id="islandMap" class="island-map"></div>
+          <span class="map-step-label">Step 1 · 探索</span>
           <div class="map-legend" aria-label="地图图例">
             <span><i class="legend-node"></i>探索节点</span>
             <span><i class="legend-route"></i>观点航线</span>
@@ -185,16 +179,13 @@
           </div>
         </section>
 
-        <div class="voyage-bridge" aria-label="从观点探索到航海日志">
-          <span class="bridge-route" aria-hidden="true">⌄</span><p>探索完岛屿，去航海日志留下你的航迹 →</p>
-          <ol class="voyage-steps"><li><span>01</span> 🗺️ 探索观点岛</li><li><span>02</span> ✍️ 记录你的经历</li><li><span>03</span> 💬 遇见回应</li></ol>
-        </div>
-        <div class="journal-entrance">
-          <p class="journal-entrance-lead">探索完毕，进入航海日志 ↓</p>
-          <div><span class="eyebrow">02 · THE VOYAGE CONTINUES</span><h3>从一个问题出发，留下你的这一程。</h3><p>把真实经历留在同一个问题下，遇见愿意交换经验的人。</p></div>
-          <button id="enterJournal" class="primary-button" type="button">进入航海日志 →</button>
-        </div>
-        <section class="closing-section">
+        <div class="journal-page-turn" aria-hidden="true"><span></span><i>航海日志 · NEXT PAGE</i></div>
+        <div class="journal-entrance journal-scroll-entry" aria-label="从观点探索到航海日志">
+          <div class="journal-scale" aria-hidden="true"><i>⚑</i><i>⚓</i><i>✦</i></div>
+          <span class="journal-entrance-lead">Step 2 · 记录</span>
+          <div><span class="eyebrow">THE VOYAGE CONTINUES</span><h3>把这一程写进航海日志。</h3><p>留下真实经历，继续与同路人交换经验。</p></div>
+          <button id="enterJournal" class="journal-text-link" type="button">进入航海日志 →</button>
+        </div>        <section class="closing-section">
           <p class="eyebrow">一次探索的终点</p>
           <h3>找到至少一个<br><span>“我想进一步了解的人”</span></h3>
           <button id="bottomRestart" class="secondary-button" type="button">换一个问题继续探索</button>
@@ -219,6 +210,12 @@
     </footer>
 
     <script src="./journal.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script src="./static-data.js"></script>
+    <script src="./app.js"></script>
   </body>
 </html>
+
+
+
+
+

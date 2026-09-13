@@ -1,4 +1,217 @@
-import { createQuestionGlobe } from "./globe.js";
+(() => {
+const DEG = Math.PI / 180;
+
+const LANDMASSES = [
+  [[72,-168],[68,-135],[58,-121],[50,-92],[52,-66],[34,-76],[17,-88],[18,-109],[33,-124],[54,-148]],
+  [[13,-81],[5,-75],[-7,-78],[-20,-69],[-39,-63],[-54,-70],[-35,-52],[-11,-48],[3,-55]],
+  [[70,-12],[72,34],[65,74],[68,122],[55,154],[37,141],[21,112],[9,80],[24,55],[18,34],[37,22],[45,-8]],
+  [[36,-17],[36,18],[24,40],[3,43],[-20,34],[-36,19],[-31,1],[-7,-16],[14,-17]],
+  [[-12,112],[-18,146],[-38,153],[-44,132],[-30,114]],
+  [[82,-52],[72,-24],[61,-42],[64,-62]]
+];
+
+function spherePoint(latitude, longitude, yaw, pitch) {
+  const lat = latitude * DEG;
+  const lon = longitude * DEG + yaw;
+  const cosLat = Math.cos(lat);
+  const x = cosLat * Math.sin(lon);
+  const y = -Math.sin(lat);
+  const z = cosLat * Math.cos(lon);
+  const cosPitch = Math.cos(pitch);
+  const sinPitch = Math.sin(pitch);
+  return { x, y: y * cosPitch - z * sinPitch, z: y * sinPitch + z * cosPitch };
+}
+
+function strokeVisible(context, points, project) {
+  let drawing = false;
+  context.beginPath();
+  points.forEach(([latitude, longitude]) => {
+    const point = project(latitude, longitude);
+    if (point.z <= 0) {
+      drawing = false;
+      return;
+    }
+    if (drawing) context.lineTo(point.x, point.y);
+    else context.moveTo(point.x, point.y);
+    drawing = true;
+  });
+  context.stroke();
+}
+
+function createQuestionGlobe({ canvas, stage, motionSurface }) {
+  if (!canvas || !stage || !motionSurface) return () => {};
+  const context = canvas.getContext("2d");
+  if (!context) return () => {};
+
+  const questions = [...stage.querySelectorAll(".floating-question")];
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const state = { width: 0, height: 0, radius: 0, x: 0, y: 0, targetX: 0, targetY: 0, frame: 0 };
+
+  function resize() {
+    const bounds = canvas.getBoundingClientRect();
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    state.width = Math.max(1, bounds.width);
+    state.height = Math.max(1, bounds.height);
+    state.radius = Math.min(state.width, state.height) * .49;
+    canvas.width = Math.round(state.width * ratio);
+    canvas.height = Math.round(state.height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+
+  function project(latitude, longitude, yaw, pitch) {
+    const point = spherePoint(latitude, longitude, yaw, pitch);
+    return {
+      x: state.width / 2 + point.x * state.radius,
+      y: state.height / 2 + point.y * state.radius,
+      z: point.z
+    };
+  }
+
+  function drawGrid(yaw, pitch) {
+    context.save();
+    context.strokeStyle = "rgba(236,229,195,.18)";
+    context.lineWidth = 1;
+    for (let latitude = -45; latitude <= 45; latitude += 45) {
+      const points = [];
+      for (let longitude = -180; longitude <= 180; longitude += 4) points.push([latitude, longitude]);
+      strokeVisible(context, points, (lat, lon) => project(lat, lon, yaw, pitch));
+    }
+    for (let longitude = -180; longitude < 180; longitude += 45) {
+      const points = [];
+      for (let latitude = -90; latitude <= 90; latitude += 3) points.push([latitude, longitude]);
+      strokeVisible(context, points, (lat, lon) => project(lat, lon, yaw, pitch));
+    }
+    context.restore();
+  }
+
+  function drawLand(yaw, pitch) {
+    LANDMASSES.forEach((land, index) => {
+      const points = land.map(([latitude, longitude]) => project(latitude, longitude, yaw, pitch));
+      const visible = points.filter((point) => point.z > -.05);
+      if (visible.length < 3) return;
+      context.save();
+      context.beginPath();
+      visible.forEach((point, pointIndex) => {
+        if (pointIndex) context.lineTo(point.x, point.y);
+        else context.moveTo(point.x, point.y);
+      });
+      context.closePath();
+      const gradient = context.createLinearGradient(0, 0, state.width, state.height);
+      gradient.addColorStop(0, index % 2 ? "rgba(189,184,143,.88)" : "rgba(205,198,157,.9)");
+      gradient.addColorStop(1, "rgba(118,132,92,.92)");
+      context.fillStyle = gradient;
+      context.strokeStyle = "rgba(237,229,191,.34)";
+      context.lineWidth = 1.1;
+      context.lineJoin = "round";
+      context.shadowColor = "rgba(23,34,25,.25)";
+      context.shadowBlur = 8;
+      context.fill();
+      context.shadowBlur = 0;
+      context.stroke();
+      context.restore();
+    });
+  }
+
+  function drawMarkers(yaw, pitch) {
+    const markers = [[39,116],[31,121],[22,114],[35,-74],[51,-.1],[-34,151],[1,104],[-23,-46]];
+    markers.forEach(([latitude, longitude], index) => {
+      const point = project(latitude, longitude, yaw, pitch);
+      if (point.z <= .05) return;
+      const alpha = .28 + point.z * .58;
+      context.beginPath();
+      context.arc(point.x, point.y, index % 3 === 0 ? 3.2 : 2.2, 0, Math.PI * 2);
+      context.fillStyle = `rgba(215,174,92,${alpha})`;
+      context.fill();
+      context.beginPath();
+      context.arc(point.x, point.y, 7, 0, Math.PI * 2);
+      context.strokeStyle = `rgba(224,194,126,${alpha * .45})`;
+      context.stroke();
+    });
+  }
+
+  function draw(now) {
+    state.x += (state.targetX - state.x) * .055;
+    state.y += (state.targetY - state.y) * .055;
+    if (document.hidden || motionSurface.hidden) {
+      state.frame = requestAnimationFrame(draw);
+      return;
+    }
+    const yaw = -.4 + (reducedMotion.matches ? 0 : now * .000035) + state.x * .72;
+    const pitch = -.1 + state.y * .32;
+    context.clearRect(0, 0, state.width, state.height);
+    const centerX = state.width / 2;
+    const centerY = state.height / 2;
+
+    context.save();
+    context.beginPath();
+    context.arc(centerX, centerY, state.radius, 0, Math.PI * 2);
+    context.clip();
+    const ocean = context.createRadialGradient(
+      centerX - state.radius * .32 - state.x * 12,
+      centerY - state.radius * .34 - state.y * 9,
+      state.radius * .08,
+      centerX,
+      centerY,
+      state.radius * 1.08
+    );
+    ocean.addColorStop(0, "#87927a");
+    ocean.addColorStop(.46, "#566c52");
+    ocean.addColorStop(.82, "#314b3a");
+    ocean.addColorStop(1, "#1e3429");
+    context.fillStyle = ocean;
+    context.fillRect(0, 0, state.width, state.height);
+    drawGrid(yaw, pitch);
+    drawLand(yaw, pitch);
+    drawMarkers(yaw, pitch);
+    const shade = context.createLinearGradient(0, 0, state.width, 0);
+    shade.addColorStop(0, "rgba(255,250,224,.12)");
+    shade.addColorStop(.52, "rgba(255,255,255,0)");
+    shade.addColorStop(1, "rgba(8,19,13,.34)");
+    context.fillStyle = shade;
+    context.fillRect(0, 0, state.width, state.height);
+    context.restore();
+
+    context.beginPath();
+    context.arc(centerX, centerY, state.radius - .75, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(48,67,49,.9)";
+    context.lineWidth = 1.5;
+    context.stroke();
+    state.frame = requestAnimationFrame(draw);
+  }
+
+  function move(event) {
+    const bounds = motionSurface.getBoundingClientRect();
+    state.targetX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - .5) * 2));
+    state.targetY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - .5) * 2));
+    questions.forEach((question, index) => {
+      const depth = .2 + (index % 4) * .07;
+      const direction = index % 2 === 0 ? 1 : -1;
+      question.style.translate = `${(state.targetX * 7 * depth * direction).toFixed(2)}px ${(state.targetY * 5 * depth).toFixed(2)}px`;
+    });
+  }
+
+  function leave() {
+    state.targetX = 0;
+    state.targetY = 0;
+    questions.forEach((question) => { question.style.translate = "0 0"; });
+  }
+
+  resize();
+  const observer = new ResizeObserver(resize);
+  observer.observe(canvas);
+  motionSurface.addEventListener("pointermove", move);
+  motionSurface.addEventListener("pointerleave", leave);
+  state.frame = requestAnimationFrame(draw);
+
+  return () => {
+    cancelAnimationFrame(state.frame);
+    observer.disconnect();
+    motionSurface.removeEventListener("pointermove", move);
+    motionSurface.removeEventListener("pointerleave", leave);
+  };
+}
+;
+
 
 const elements = {
   form: document.querySelector("#questionForm"),
@@ -111,7 +324,7 @@ function setModeBadge(mode) {
 
 async function checkHealth() {
   try {
-    const response = await fetch("/api/health");
+    const response = await staticApi("/api/health");
     const data = await response.json();
     setModeBadge(data.dataMode);
   } catch {
@@ -163,7 +376,7 @@ async function submitQuestion(question) {
   state.selectedViewpointIndex = -1;
   showViewpointGate();
 
-  const request = fetch("/api/explore", {
+  const request = staticApi("/api/explore", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question })
@@ -219,24 +432,38 @@ function showViewpointGate() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderViewpointGate(viewpoints, clusters) {
-  const fallback = clusters.flatMap((cluster, clusterIndex) => (cluster.people || []).slice(0, 2).map((person) => ({
-    id: person.quote?.evidenceId || person.id,
-    text: person.quote?.text || person.viewpoint,
-    author: { name: person.name, avatar: person.avatar, headline: person.headline },
-    clusterIndex,
-    isSynthetic: false
-  })));
-  const options = (viewpoints.length ? viewpoints : fallback).slice(0, 6);
-  elements.viewpointGateCards.innerHTML = options.length ? options.map((viewpoint) => {
-    const cluster = clusters[Number(viewpoint.clusterIndex) || 0];
-    return '<button class="viewpoint-quote-card" type="button" data-viewpoint-index="' + (Number(viewpoint.clusterIndex) || 0) + '" style="--viewpoint-color:' + safeColor(cluster?.color) + '">' +
-      '<span class="viewpoint-quote-mark" aria-hidden="true">“</span>' +
-      '<span class="viewpoint-quote-copy"><strong>' + escapeHtml(viewpoint.text) + '</strong><small>' + avatarMarkup(viewpoint.author || {}) + '<span>' + escapeHtml(viewpoint.author?.name || "知乎用户") + ' · ' + escapeHtml(viewpoint.author?.headline || "相关回答") + '</span><em>♡ ' + Number(viewpoint.voteUpCount || 0) + '</em></small></span>' +
-      '<span class="viewpoint-gate-arrow" aria-hidden="true">→</span></button>';
-  }).join("") : '<div class="viewpoint-cloud-empty">暂时没有足够可靠的观点摘录，将从完整群岛开始探索。</div>';
+// One synthesized navigation question per island, not an attributed user quotation.
+function islandCoreQuestion(cluster) {
+  const explicit = cluster.coreQuestion || cluster.question;
+  if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+  const key = `${cluster.id || ""} ${cluster.name || ""}`;
+  if (/opportunity|机会|远望/.test(key)) return "这个选择能带来什么新机会，值得我尝试吗？";
+  if (/capability|能力|底牌/.test(key)) return "我具备哪些能力，还需要补齐什么条件？";
+  if (/risk|风险|校准/.test(key)) return "我可能付出哪些代价，有什么风险被忽略了？";
+  if (/path|行动|启程/.test(key)) return "怎样先做一次小尝试，验证这条路是否适合我？";
+  return `关于${cluster.name || "这个方向"}，我应该如何判断与选择？`;
+}
 
-  elements.viewpointGateCards.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
+function renderViewpointGate(viewpoints, clusters) {
+  const host = elements.viewpointGateCards;
+  host.dataset.islandCount = String(clusters.length);
+  host.style.setProperty("--question-rows", String(Math.max(1, Math.ceil(clusters.length / 2))));
+  host.innerHTML = clusters.length ? `
+    <div class="viewpoint-center-island" aria-hidden="true"><img src="./assets/hand-island-1.png" alt=""></div>
+    ${clusters.map((cluster, index) => `
+      <button class="viewpoint-quote-card island-question-card" type="button"
+        data-viewpoint-index="${index}" style="--viewpoint-color:${safeColor(cluster.color)};--question-row:${Math.floor(index / 2) + 1};--question-column:${index % 2 ? 3 : 1}">
+        <span class="viewpoint-quote-copy">
+          <small class="island-question-heading"><span>${String(index + 1).padStart(2, "0")} · ${escapeHtml(cluster.name || "观点岛")}</span><em>岛屿核心问题</em></small>
+          <strong>${escapeHtml(islandCoreQuestion(cluster))}</strong>
+          <span class="island-question-summary">${escapeHtml(cluster.summary || "从这个角度，寻找与你有关的经历和观点。")}</span>
+          <span class="island-question-enter">探索这座岛 <span aria-hidden="true">→</span></span>
+        </span>
+      </button>`).join("")}
+  ` : '<div class="viewpoint-cloud-empty">暂无可探索的岛屿，请重新输入问题。</div>';
+  const title = document.querySelector("#viewpointGateTitle");
+  if (title) title.textContent = clusters.length ? `${clusters.length} 座岛，${clusters.length} 个值得思考的问题` : "暂未找到观点岛";
+  host.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
     button.addEventListener("click", () => {
       if (state.viewpointSelection) state.viewpointSelection(Number(button.dataset.viewpointIndex));
     });
@@ -257,8 +484,8 @@ function renderResult() {
   const result = state.result;
   window.renderJournal?.(result);
   elements.resultQuestion.textContent = result.question;
-  elements.coreTension.textContent = result.analysis?.coreTension || "正在比较不同的思考路径";
-  elements.queryPills.innerHTML = (result.analysis?.searchQueries || [])
+  if (elements.coreTension) elements.coreTension.textContent = result.analysis?.coreTension || "正在比较不同的思考路径";
+  if (elements.queryPills) elements.queryPills.innerHTML = (result.analysis?.searchQueries || [])
     .map((query) => `<span>${escapeHtml(query)}</span>`)
     .join("");
 
@@ -323,47 +550,19 @@ const islandCoastlines = [
 ];
 
 function islandTerrainMarkup(index) {
-  const coast = islandCoastlines[index % islandCoastlines.length];
-  return `<svg class="island-terrain" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
-    <defs>
-      <filter id="terrain-paper-${index}" x="-20%" y="-25%" width="140%" height="150%">
-        <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="${index + 4}" result="noise" />
-        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" />
-      </filter>
-    </defs>
-    <g filter="url(#terrain-paper-${index})">
-      <path class="terrain-tide terrain-tide-outer" d="${coast}" />
-    <path class="terrain-tide" d="${coast}" />
-    <path class="terrain-sand" d="${coast}" />
-    <path class="terrain-shore" d="${coast}" />
-    <path class="terrain-land" d="${coast}" />
-    <g class="terrain-contours">
-      <path d="M68 103Q59 66 105 64Q137 39 168 59Q220 38 247 86Q268 124 236 151Q206 177 164 160Q108 190 79 147Z" />
-      <path d="M91 106Q77 82 117 83Q150 54 181 78Q221 63 232 105Q248 139 208 144Q175 164 145 146Q99 166 91 132Z" />
-      <path d="M113 112Q107 90 140 97Q162 76 188 98Q218 99 211 124Q178 148 154 132Q129 145 113 112Z" />
-    </g>
-    <path class="terrain-lake" d="M192 122Q209 108 228 119Q245 135 228 146Q210 153 199 140Q181 139 192 122Z" />
-    <g class="terrain-mountains"><path d="M92 110L128 58L166 111M133 115L164 73L195 117" /><path d="M116 75L128 58L141 78L131 73L125 82ZM153 88L164 73L175 91L165 85L160 94Z" /></g>
-    <g class="terrain-trees"><path d="M73 120l-8 17h16ZM87 130l-9 19h18ZM103 143l-8 17h16ZM222 68l-8 17h16ZM238 82l-8 17h16ZM213 83l-7 15h14Z" /><path d="M73 137v6M87 149v6M103 160v5M222 85v6M238 99v6M213 98v5" /></g>
-      <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
-      <g class="terrain-islets">
-        <path d="M35 72q-13-9-3-20q12-8 21 2q5 12-5 18q-7 5-13 0Z" />
-        <path d="M260 49q10-13 23-7q11 10 2 20q-12 8-23-1q-5-5-2-12Z" />
-        <path d="M274 161q12-7 20 3q6 11-5 17q-12 4-18-7q-2-8 3-13Z" />
-      </g>
-    </g>
-  </svg>`;
+  const assetIndex = (Number(index) % 4) + 1;
+  return `<img class="island-terrain hand-drawn-island" src="./assets/hand-island-${assetIndex}.png" alt="" aria-hidden="true">`;
 }
 
 function mapRoutesMarkup(positions) {
   const count = positions.length;
   const edges = count === 5 ? [[4, 0], [4, 1], [4, 2], [4, 3]]
-    : count === 4 ? [[0, 1], [0, 2], [1, 3]]
+    : count === 4 ? [[0, 1], [1, 3], [3, 2], [2, 0]]
     : count === 3 ? [[0, 1], [0, 2]] : count === 2 ? [[0, 1]] : [];
   return `<svg class="map-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">${edges.map(([from, to]) => {
     const [x1, y1] = positions[from];
     const [x2, y2] = positions[to];
-    return `<path d="M${x1} ${y1} Q${(x1 + x2) / 2 + 3} ${(y1 + y2) / 2 - 3} ${x2} ${y2}" />`;
+    return `<path d="M${x1} ${y1} L${x2} ${y2}" />`;
   }).join("")}</svg>`;
 }
 
@@ -462,7 +661,7 @@ function renderIslandScene(index) {
           <small>${escapeHtml(person.recommendationType || "值得了解")}</small>
           <span class="person-viewpoint">${escapeHtml(person.viewpoint)}</span>
         </span>
-        <i class="person-seal" aria-hidden="true">见</i>
+        
       </span>
       <span class="map-person-thought">
         <span class="scroll-ribbon">一纸知友名帖</span>
@@ -491,6 +690,7 @@ function findEvidence(id) {
 }
 
 async function openPerson(person, cluster, color) {
+  const restoreScrollY = window.scrollY;
   const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]);
   const sourceUrl = safeZhihuUrl(evidence?.url);
   const sourceLabel = evidence?.isSynthetic ? "打开知乎搜索" : "查看知乎原文";
@@ -516,6 +716,7 @@ async function openPerson(person, cluster, color) {
       <section id="icebreakerArea" class="icebreaker-area" hidden></section>
     </div>`;
   elements.dialog.showModal();
+  elements.dialog.addEventListener("close", () => { window.scrollTo({ top: restoreScrollY, left: 0, behavior: "instant" }); }, { once: true });
   document.querySelector("#shareExperience").onclick = () => { elements.dialog.close(); window.openJournal(person); };
   document.querySelector("#personTopicJournal").onclick = () => { elements.dialog.close(); window.openTopicJournal?.(person); };
   document.querySelector("#openSource").addEventListener("click", () => { const branch = state.trail?.branches.get(state.result.clusters.indexOf(cluster)); const item = branch?.people.get(person.name || person.quote?.evidenceId); if (item) item.opened = true; });
@@ -527,7 +728,7 @@ async function generateDrafts(button, person, evidence) {
   button.textContent = "正在准备开场白…";
 
   try {
-    const response = await fetch("/api/icebreakers", {
+    const response = await staticApi("/api/icebreakers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -639,7 +840,7 @@ function showTrail(continueExplore) {
   const profilesOpened = branches.reduce((total, branch) => total + [...branch.people.values()].filter((person) => person.opened).length, 0);
   const dialog = document.createElement("dialog");
   dialog.className = "person-dialog";
-  dialog.innerHTML = '<div class="dialog-body trail-dialog"><button class="dialog-close" type="button">×</button><p class="eyebrow">知路 · 探索回顾</p><h2>你的探索航线</h2><p class="trail-note">1 个问题 · ' + branches.length + ' 座观点岛 · ' + peopleSeen + ' 位知友</p><div class="trail-tree"><div class="trail-route-water" aria-hidden="true"><span class="trail-boat">⛵</span>' + branches.slice(0, 3).map(() => '<span class="trail-stop"></span>').join("") + '</div><div class="trail-trunk"><small>本次问题</small><strong>' + escapeHtml(state.trail.question) + '</strong></div><div class="trail-branches">' + branches.map((branch) => '<section class="trail-branch" style="--trail-color:' + escapeHtml(branch.color) + '"><small>已点击观点岛</small><h3>' + escapeHtml(branch.name) + '</h3><p>' + escapeHtml(branch.summary) + '</p><div>' + [...branch.people.values()].map((person) => '<article class="trail-leaf">' + avatarMarkup(person) + '<span><strong>' + escapeHtml(person.name) + '</strong><small>' + escapeHtml(person.headline) + '</small></span><em>' + (person.opened ? "已查看主页" : "已查看人物") + '</em></article>').join("") + '</div></section>').join("") + '</div></div><section class="trail-actions"><div class="trail-actions-top"><h3>本次探索收获</h3><small>把下一步留给你决定</small></div><ul class="trail-action-list"><li>看过 <strong>' + branches.length + '</strong> 座观点岛</li><li>认识 <strong>' + peopleSeen + '</strong> 位相关作者</li><li>打开 <strong>' + profilesOpened + '</strong> 个原文主页</li><li>下一步：选择一位作者，带着共同问题继续了解</li></ul><div class="trail-action-buttons"><button class="outline-button trail-keep" type="button">继续探索此问题</button><button class="outline-button primary trail-next" type="button">换一个问题</button></div></section></div>';
+  dialog.innerHTML = '<div class="dialog-body trail-dialog"><button class="dialog-close" type="button">×</button><p class="eyebrow">知路 · 探索回顾</p><h2>你的探索航线</h2><p class="trail-note">1 个问题 · ' + branches.length + ' 座观点岛 · ' + peopleSeen + ' 位知友</p><div class="trail-tree"><div class="trail-route-water" aria-hidden="true"><span class="trail-boat" aria-label="航行中的船">⛵</span>' + branches.slice(0, 3).map(() => '<span class="trail-stop"></span>').join("") + '</div><div class="trail-trunk"><small>本次问题</small><strong>' + escapeHtml(state.trail.question) + '</strong></div><div class="trail-branches">' + branches.map((branch) => '<section class="trail-branch" style="--trail-color:' + escapeHtml(branch.color) + '"><small>已点击观点岛</small><h3>' + escapeHtml(branch.name) + '</h3><p>' + escapeHtml(branch.summary) + '</p><div>' + [...branch.people.values()].map((person) => '<article class="trail-leaf">' + avatarMarkup(person) + '<span><strong>' + escapeHtml(person.name) + '</strong><small>' + escapeHtml(person.headline) + '</small></span><em>' + (person.opened ? "已查看主页" : "已查看人物") + '</em></article>').join("") + '</div></section>').join("") + '</div></div><section class="trail-actions"><div class="trail-actions-top"><h3>本次探索收获</h3><small>把下一步留给你决定</small></div><ul class="trail-action-list"><li>看过 <strong>' + branches.length + '</strong> 座观点岛</li><li>认识 <strong>' + peopleSeen + '</strong> 位相关作者</li><li>打开 <strong>' + profilesOpened + '</strong> 个原文主页</li><li>下一步：选择一位作者，带着共同问题继续了解</li></ul><div class="trail-action-buttons"><button class="outline-button trail-keep" type="button">继续探索此问题</button><button class="outline-button primary trail-next" type="button">换一个问题</button></div></section></div>';
   document.body.append(dialog);
   dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
   dialog.querySelector(".trail-keep").addEventListener("click", () => dialog.close());
@@ -916,7 +1117,7 @@ checkHealth();
       add("我探索了  " + records.map(r=>r.cluster?.name || "观点岛").join(" · "),22,"#455a44",20);
       const people = records.flatMap(r=>[...r.people.values()]);
       add("遇到了谁  " + (people.map(p=>p.name).join("、") || "尚未打开人物卡片"),22,"#455a44",26);
-      add("见到了什么内容",25,"#263f31",18);
+      add("我收获了",25,"#263f31",18);
       if (!people.length) add("还没有阅读人物内容。下一程，从一张人物卡片开始。",21,"#657157");
       people.forEach(p=>{
         const evidence=findEvidence(p.quote?.evidenceId || p.evidenceIds?.[0]);
@@ -960,7 +1161,7 @@ checkHealth();
       document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
       showToast("航线图片已生成，请在浏览器下载中查看。");
     } catch(error) { showToast(error.message || "图片保存失败，请重试"); }
-    finally {button.disabled=false;button.textContent="保存图片 ↓";}
+    finally {button.disabled=false;button.textContent="保存图片";}
   }
 
   function showVoyage(nextAction) {
@@ -1031,16 +1232,16 @@ checkHealth();
 
         <section class="voyage-people" aria-label="本次查看的人物">${personCards(visited)}</section>
         <section class="voyage-harvest">
-          <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong></div></div>
+          <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong><img class="harvest-island" src="./assets/hand-island-1.png" alt="" aria-hidden="true"></div></div>
           <div class="voyage-harvest-copy">
-            <p><b>我看了</b>${escapeHtml(names.join("、"))}</p>
+            <p><b>我探险了</b>${escapeHtml(names.join("、"))}</p>
             <p><b>遇到了谁</b>${personNames.length ? escapeHtml(personNames.join("、")) : "还没有打开人物卡片"}</p>
-            <div class="voyage-seen-content"><b>见到了什么内容</b><ul>${people.length ? people.map(person => { const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]); return `<li><strong>${escapeHtml(person.name)} · ${escapeHtml(evidence?.title || "人物卡片中的观点")}</strong><q>${escapeHtml(person.quote?.text || evidence?.excerpt || person.viewpoint || "暂无内容节选")}</q></li>`; }).join("") : "<li>尚未打开人物内容。继续探索，读一段具体经历。</li>"}</ul></div>
+            <div class="voyage-seen-content"><b>我收获了</b><ul>${people.length ? people.map(person => { const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]); return `<li><strong>${escapeHtml(person.name)} · ${escapeHtml(evidence?.title || "人物卡片中的观点")}</strong><q>${escapeHtml(person.quote?.text || evidence?.excerpt || person.viewpoint || "暂无内容节选")}</q></li>`; }).join("") : "<li>尚未打开人物内容。继续探索，读一段具体经历。</li>"}</ul></div>
             <p><b>下一步</b>${people.length ? "继续认识感兴趣的人，带着一个具体问题发起交流。" : "选择一位岛上的知友，看看 TA 的公开观点。"}</p>
           </div>
           <div class="voyage-map-actions">
             <button class="outline-button voyage-continue" type="button">继续探索</button>
-            <button class="outline-button voyage-save" type="button">保存图片 ↓</button>
+            <button class="outline-button voyage-save" type="button">保存图片</button>
             <button class="outline-button primary voyage-next" type="button">换一个问题</button>
           </div>
         </section>
@@ -1100,9 +1301,11 @@ checkHealth();
       const ratio = ((now - startedAt) % duration) / duration;
       const distance = ratio * length;
       const point = path.getPointAtLength(distance);
-      const ahead = path.getPointAtLength(Math.min(length, distance + 3));
-      const angle = Math.atan2(ahead.y - point.y, ahead.x - point.x) * 180 / Math.PI;
-      ship.setAttribute("transform", `translate(${point.x} ${point.y}) rotate(${angle})`);
+      // Keep the vessel facing the user: the sail always points to the top of the page.
+      ship.setAttribute("transform", `translate(${point.x} ${point.y})`);
+      ship.style.display = "block";
+      ship.style.visibility = "visible";
+      ship.style.opacity = "1";
       progress.style.strokeDashoffset = String(length * (1 - ratio));
       voyageState.animationFrame = requestAnimationFrame(frame);
     };
@@ -1125,7 +1328,7 @@ checkHealth();
       .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:radial-gradient(ellipse at center,rgba(198,216,202,.38),transparent 68%);background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
       .voyage-chart::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-radial-gradient(ellipse at center,transparent 0 56px,rgba(132,111,70,.035) 58px 59px,transparent 60px 92px);mix-blend-mode:multiply}
       .voyage-quote{position:absolute;left:25px;top:19px;z-index:5;margin:0;color:#71664c;font:italic 14px/1.8 serif;letter-spacing:.08em}.voyage-compass{position:absolute;right:28px;top:16px;z-index:5;width:76px;height:76px;border:1px solid rgba(142,108,50,.55);border-radius:50%;color:#8c6c36;text-align:center;font:10px/1 serif}.voyage-compass::before,.voyage-compass::after{content:"";position:absolute;left:50%;top:8px;width:1px;height:60px;background:#9b7b43}.voyage-compass::after{transform:rotate(90deg)}.voyage-compass i{position:absolute;left:23px;top:23px;width:27px;height:27px;border:1px solid #99783f;transform:rotate(45deg);background:linear-gradient(135deg,#99783f 0 49%,transparent 50%)}.voyage-compass b{position:absolute;top:-13px;left:33px}.voyage-compass em{position:absolute;bottom:-14px;left:34px;font-style:normal}.voyage-compass span{position:absolute;left:-12px;top:34px;white-space:pre;word-spacing:54px}
-      .voyage-routes{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible}.voyage-branch-route{fill:none;stroke:#a47d3d;stroke-width:1.7;stroke-dasharray:7 8;opacity:.42}.voyage-main-route{fill:none;stroke:#385744;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 8;opacity:.72}.voyage-route-progress{fill:none;stroke:#c39b50;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 1px 2px rgba(54,63,43,.35))}.voyage-stop circle:first-child{fill:#f7efdb;stroke:#385744;stroke-width:3}.voyage-stop circle:nth-child(2){fill:#b6904c}.voyage-stop text{fill:#314c3d;font:700 13px serif;text-anchor:middle}.voyage-ship{filter:drop-shadow(0 5px 4px rgba(33,50,40,.32));transform-box:fill-box;transform-origin:center}.ship-hull{fill:#233f32;stroke:#f0dfb1;stroke-width:1.4}.ship-mast{fill:none;stroke:#263f32;stroke-width:2.4}.ship-sail-a{fill:#f7eed6;stroke:#263f32;stroke-width:1.3}.ship-sail-b{fill:#526b55;stroke:#263f32;stroke-width:1.2}.ship-flag{fill:#b78f48}
+      .voyage-routes{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible}.voyage-branch-route{fill:none;stroke:#a47d3d;stroke-width:1.7;stroke-dasharray:7 8;opacity:.42}.voyage-main-route{fill:none;stroke:#385744;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 8;opacity:.72}.voyage-route-progress{fill:none;stroke:#c39b50;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 1px 2px rgba(54,63,43,.35))}.voyage-stop circle:first-child{fill:#f7efdb;stroke:#385744;stroke-width:3}.voyage-stop circle:nth-child(2){fill:#b6904c}.voyage-stop text{fill:#314c3d;font:700 13px serif;text-anchor:middle}.voyage-ship{display:block!important;visibility:visible!important;opacity:1!important;filter:drop-shadow(0 5px 4px rgba(33,50,40,.32));transform-box:fill-box;transform-origin:center;transform-style:flat}.ship-hull{fill:#233f32;stroke:#f0dfb1;stroke-width:1.4}.ship-mast{fill:none;stroke:#263f32;stroke-width:2.4}.ship-sail-a{fill:#f7eed6;stroke:#263f32;stroke-width:1.3}.ship-sail-b{fill:#526b55;stroke:#263f32;stroke-width:1.2}.ship-flag{fill:#b78f48}
       .voyage-island-label{position:absolute;z-index:6;left:calc(var(--island-x)/1100*100%);top:calc(var(--island-y)/550*100%);width:170px;min-height:84px;padding:13px 15px 12px;color:#fffef4;text-align:center;background:radial-gradient(ellipse at 50% 20%,rgba(125,144,103,.97),rgba(59,79,57,.97) 70%);border:1px solid rgba(248,232,190,.72);border-radius:44% 56% 47% 53%/55% 42% 58% 45%;box-shadow:0 9px 18px rgba(29,46,35,.26),inset 0 0 0 3px rgba(244,232,196,.12);transform:translate(-50%,-50%);animation:voyageIslandIn .5s both;animation-delay:var(--island-delay)}.voyage-island-label::before,.voyage-island-label::after{content:"";position:absolute;z-index:-1;background:#6d7c5d;border:2px solid rgba(247,234,201,.55);border-radius:50%}.voyage-island-label::before{width:22px;height:15px;left:-18px;top:42px}.voyage-island-label::after{width:15px;height:11px;right:-12px;bottom:18px}.voyage-island-icon{display:block;font:24px/1 serif;color:#fff5d5}.voyage-island-label strong{display:block;margin:2px 0;font:700 18px/1.2 serif;letter-spacing:.08em}.voyage-island-label small{display:block;max-width:145px;margin:auto;font:11px/1.35 sans-serif;opacity:.9}.voyage-island-label>span:last-child{position:absolute;right:9px;top:8px;width:18px;height:18px;border:1px solid rgba(255,255,255,.65);border-radius:50%;font:700 10px/17px sans-serif}
       .voyage-person-card{position:absolute;z-index:9;left:calc(var(--card-x)/1100*100%);top:calc(var(--card-y)/550*100%);display:flex;align-items:center;gap:9px;width:180px;min-height:54px;padding:6px 10px 6px 6px;background:rgba(255,252,243,.94);border:1px solid rgba(166,132,76,.28);border-radius:32px;color:#263f33;box-shadow:0 6px 16px rgba(39,52,42,.2);animation:voyageCardIn .55s .25s both}.voyage-person-card.right{transform:translateX(-25%)}.voyage-person-avatar{flex:0 0 42px;width:42px;height:42px;display:grid;place-items:center;overflow:hidden;border:2px solid #c6a363;border-radius:50%;background:#dce1d1;color:#39533e;font:700 18px serif}.voyage-person-avatar img{width:100%;height:100%;object-fit:cover}.voyage-person-copy{display:block;min-width:0}.voyage-person-copy strong,.voyage-person-copy small,.voyage-person-copy em{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.voyage-person-copy strong{font:700 14px/1.25 serif}.voyage-person-copy small{max-width:112px;color:#665c49;font-size:10px}.voyage-person-copy em{margin-top:2px;color:#48634c;font:normal 9px/1.2 sans-serif}.voyage-person-copy em i{color:#799070;font-size:7px;margin-right:4px}
       .voyage-question-plaque{position:absolute;z-index:8;left:50%;bottom:12px;width:min(460px,50%);padding:9px 28px 12px;text-align:center;color:#fff9e7;background:linear-gradient(180deg,#385442,#223b31);border:2px solid #bc9752;border-radius:38px 38px 24px 24px;box-shadow:0 0 0 3px #314a3a,0 0 0 5px #d2b16a,0 8px 19px rgba(28,45,35,.25);transform:translateX(-50%)}.voyage-question-plaque::before,.voyage-question-plaque::after{content:"";position:absolute;top:50%;width:30px;height:1px;background:#cfb475}.voyage-question-plaque::before{left:16px}.voyage-question-plaque::after{right:16px}.voyage-question-plaque small{display:block;color:#d8c795;font:11px/1.4 serif;letter-spacing:.18em}.voyage-question-plaque strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 20px/1.35 serif;letter-spacing:.06em}.voyage-map-note{position:absolute;z-index:7;left:18px;bottom:9px;margin:0;color:#796a4c;font:11px/1.2 serif}
@@ -1150,4 +1353,28 @@ checkHealth();
 
   if (typeof showTrail !== "undefined") showTrail = showVoyage;
   ensureStyles();
+})();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 })();
