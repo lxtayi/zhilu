@@ -68,14 +68,14 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
 
   function drawGrid(yaw, pitch) {
     context.save();
-    context.strokeStyle = "rgba(236,229,195,.25)";
+    context.strokeStyle = "rgba(236,229,195,.18)";
     context.lineWidth = 1;
-    for (let latitude = -60; latitude <= 60; latitude += 30) {
+    for (let latitude = -45; latitude <= 45; latitude += 45) {
       const points = [];
       for (let longitude = -180; longitude <= 180; longitude += 4) points.push([latitude, longitude]);
       strokeVisible(context, points, (lat, lon) => project(lat, lon, yaw, pitch));
     }
-    for (let longitude = -180; longitude < 180; longitude += 30) {
+    for (let longitude = -180; longitude < 180; longitude += 45) {
       const points = [];
       for (let latitude = -90; latitude <= 90; latitude += 3) points.push([latitude, longitude]);
       strokeVisible(context, points, (lat, lon) => project(lat, lon, yaw, pitch));
@@ -183,9 +183,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     state.targetX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - .5) * 2));
     state.targetY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - .5) * 2));
     questions.forEach((question, index) => {
-      const depth = .28 + (index % 4) * .1;
+      const depth = .2 + (index % 4) * .07;
       const direction = index % 2 === 0 ? 1 : -1;
-      question.style.translate = `${(state.targetX * 13 * depth * direction).toFixed(2)}px ${(state.targetY * 9 * depth).toFixed(2)}px`;
+      question.style.translate = `${(state.targetX * 7 * depth * direction).toFixed(2)}px ${(state.targetY * 5 * depth).toFixed(2)}px`;
     });
   }
 
