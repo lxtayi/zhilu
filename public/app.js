@@ -681,17 +681,25 @@ document.querySelectorAll("[data-question]").forEach((button) => {
   });
 });
 
-if (elements.globeStage && window.matchMedia("(pointer:fine)").matches) {
-  elements.globeStage.addEventListener("pointermove", (event) => {
-    const bounds = elements.globeStage.getBoundingClientRect();
+if (elements.globeStage && elements.hero && window.matchMedia("(pointer:fine)").matches) {
+  elements.hero.addEventListener("pointermove", (event) => {
+    const bounds = elements.hero.getBoundingClientRect();
     const x = (event.clientX - bounds.left) / bounds.width - 0.5;
     const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-    elements.globeStage.style.setProperty("--globe-tilt-x", `${(-y * 9).toFixed(2)}deg`);
-    elements.globeStage.style.setProperty("--globe-tilt-y", `${(x * 11).toFixed(2)}deg`);
+    elements.globeStage.style.setProperty("--globe-tilt-x", `${(-y * 18).toFixed(2)}deg`);
+    elements.globeStage.style.setProperty("--globe-tilt-y", `${(x * 30).toFixed(2)}deg`);
+    elements.globeStage.style.setProperty("--globe-shift-x", `${(x * 12).toFixed(2)}px`);
+    elements.globeStage.style.setProperty("--globe-shift-y", `${(y * 9).toFixed(2)}px`);
+    elements.globeStage.style.setProperty("--globe-light-x", `${(-x * 20).toFixed(2)}px`);
+    elements.globeStage.style.setProperty("--globe-light-y", `${(-y * 14).toFixed(2)}px`);
   });
-  elements.globeStage.addEventListener("pointerleave", () => {
+  elements.hero.addEventListener("pointerleave", () => {
     elements.globeStage.style.removeProperty("--globe-tilt-x");
     elements.globeStage.style.removeProperty("--globe-tilt-y");
+    elements.globeStage.style.removeProperty("--globe-shift-x");
+    elements.globeStage.style.removeProperty("--globe-shift-y");
+    elements.globeStage.style.removeProperty("--globe-light-x");
+    elements.globeStage.style.removeProperty("--globe-light-y");
   });
 }
 
