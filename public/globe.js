@@ -134,7 +134,7 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
         context.moveTo(point.x + size, point.y);
         context.arc(point.x, point.y, size, 0, Math.PI * 2);
       });
-      context.fillStyle = lightTone ? "rgba(247,239,207,.62)" : "rgba(43,63,49,.7)";
+      context.fillStyle = lightTone ? "rgba(255,253,244,.58)" : "rgba(248,247,238,.84)";
       context.fill();
     });
 
