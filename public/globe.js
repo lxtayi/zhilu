@@ -327,11 +327,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   canvas.addEventListener("pointerup", stopDrag);
   canvas.addEventListener("pointercancel", stopDrag);
   questions.forEach((question) => {
-    question.addEventListener("pointerenter", () => activateQuestion(question));
     question.addEventListener("focus", () => activateQuestion(question));
     question.addEventListener("click", () => activateQuestion(question));
   });
-  activateQuestion(questions[0]);
   state.frame = requestAnimationFrame(draw);
 
   return () => {
