@@ -33,7 +33,25 @@ npm run dev
 powershell -ExecutionPolicy Bypass -File .\scripts\start-live.ps1
 ```
 
-为节省赛事额度，真实模式每个新问题只调用一次知乎搜索，随后在本地完成去重、观点归类和人物推荐；相同问题在 24 小时内会命中服务缓存。缓存保存在 `.cache/`，不会提交到 Git。
+为节省赛事额度，真实模式每个新问题只调用一次知乎搜索；去重后可调用 LLM 生成动态岛，人物与引用仍由本地生成。相同问题在 24 小时内会命中服务缓存。缓存保存在 `.cache/`，不会提交到 Git。
+
+## LLM 配置
+
+在项目根目录的 `llm.local.json` 中填写 `apiKey`、`baseUrl` 和 `model`。
+该文件已加入 `.gitignore`，不放入 `public/`，不要提交或分享。
+新检出项目可复制不含密钥的 `llm.local.example.json` 为 `llm.local.json`。
+
+- `apiKey`：提供商的 API Key，仅在本地文件或部署平台 Secret 中填写。
+- `baseUrl`：API 根地址，包含版本前缀，例如 `https://api.openai.com/v1`；不要附加 `/chat/completions`。
+- `model`：提供商支持 Chat Completions 和 JSON 模式的模型 ID。
+
+部署时可设置 `LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（本地 `.env` 也支持，由启动入口加载）。
+只要任一变量存在，就整套使用环境变量，不与本地 JSON 混用；三个变量必须一起配置。
+配置缺失、不完整、JSON 无效或地址无效时，分类返回 `failed`，继续使用固定岛 fallback。
+配置模块读取密钥并添加认证头，分类业务不读取或返回密钥。
+
+配置后启动或重启服务。演示模式、搜索内容不足及缓存命中时不会请求 LLM；
+验证时使用真实搜索模式和未缓存的问题。修改配置不会自动使已有结果缓存失效。
 
 ## 接口
 
@@ -62,6 +80,6 @@ curl -X POST http://localhost:3000/api/explore \
 
 ## 当前边界
 
-第一版使用确定性规则完成搜索向量、观点归类和破冰生成，目的是先验证完整产品流程。后续可以在不修改前端接口的情况下，将 `src/pipeline/explore.mjs` 中的规则替换为结构化大模型调用。
+搜索向量和破冰生成使用本地规则；动态岛由配置的 LLM 生成，失败时使用固定岛及主题化展示规则。LLM 不生成人物或引用。
 
 演示模式中的人物和内容均为合成数据，并在界面中明确标注，不代表真实知乎用户。
