@@ -495,73 +495,31 @@ async function openPerson(person, cluster, color) {
   const sourceUrl = safeZhihuUrl(evidence?.url);
   const sourceLabel = evidence?.isSynthetic ? "打开知乎搜索" : "查看知乎原文";
   track("person", { person, cluster, color, evidence });
-
   elements.personContent.innerHTML = `
     <div class="dialog-body" style="--person-color:${color}">
-      <div class="dialog-scroll-title">
-        <span>PERSON NOTE · 知友名帖</span>
-        <i aria-hidden="true"></i>
-        <strong>循其言，知其人</strong>
-      </div>
+      <div class="dialog-scroll-title"><span>PERSON NOTE · 知友名帖</span><i aria-hidden="true"></i></div>
       <div class="dialog-person">
         <span class="dialog-portrait">${avatarMarkup(person)}</span>
-        <div>
-          <h2>${escapeHtml(person.name)}</h2>
-          <p>${escapeHtml(person.headline || "相关内容作者")} · ${escapeHtml(cluster.name)}</p>
-        </div>
-        <span class="dialog-seal" aria-hidden="true">知<br>路</span>
+        <div><h2>${escapeHtml(person.name)}</h2><p>${escapeHtml(person.headline || "相关内容作者")}</p><span class="person-island-name">${escapeHtml(cluster.name)}</span></div>
       </div>
-
-      <section class="dialog-section">
-        <h3><span>壹</span> 缘何相荐</h3>
-        <div class="reason-box"><p>${escapeHtml(person.connectionReason)}</p></div>
-      </section>
-
-      <section class="dialog-section">
-        <h3><span>贰</span> 原文为证</h3>
-        <div class="quote-box">
-          <blockquote>“${escapeHtml(person.quote?.text || evidence?.excerpt || "暂无可引用内容")}”</blockquote>
-          <cite>${escapeHtml(evidence?.title || "内容来源整理中")}${evidence?.isSynthetic ? " · 演示内容" : " · 内容节选"}</cite>
-        </div>
-        <div class="dialog-actions">
+      <section class="dialog-section person-evidence">
+        <div class="quote-box"><blockquote>“${escapeHtml(person.quote?.text || evidence?.excerpt || "暂无可引用内容")}”</blockquote>
+        <cite>${escapeHtml(evidence?.title || "内容来源整理中")}${evidence?.isSynthetic ? " · 演示内容" : " · 内容节选"}</cite></div>
+        <div class="dialog-actions person-primary-actions">
           <a id="openSource" class="outline-button" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${sourceLabel}</a>
           <button id="generateDrafts" class="outline-button primary" type="button">生成破冰问题</button>
+          <button id="shareExperience" class="outline-button" type="button">分享我的经历</button>
         </div>
       </section>
-
+      <section class="person-context"><span aria-hidden="true">✦</span><h3>为什么值得相遇</h3><p>${escapeHtml(person.connectionReason || "从一个共同的问题开始，交换具体的经验与想法。")}</p></section>
+      <section class="person-log-preview"><h3>与本次问题有关的航海日志</h3><p>${escapeHtml(state.result.question)}</p><p class="profile-note">把你的经历留在这个问题下，也读读同路人的记录。</p><button id="personTopicJournal" class="text-button" type="button">阅读话题航迹 →</button></section>
       <section id="icebreakerArea" class="icebreaker-area" hidden></section>
-    </div>
-  `;
-
-  const profile = window.verifiedProfile(person.profileUrl || person.authorUrl || evidence?.authorUrl);
-  const actions = elements.personContent.querySelector('.dialog-actions');
-  const home = document.createElement(profile ? 'a' : 'button');
-  home.className = 'outline-button';
-  home.textContent = '跳转知乎主页 ↗';
-  if (profile) {
-    home.href = profile;
-    home.target = '_blank';
-    home.rel = 'noopener noreferrer';
-    home.addEventListener('click', () => { person.profileOpened = true; });
-  } else {
-    home.type = 'button';
-    home.disabled = true;
-    home.title = '演示人物或数据未提供真实主页，不能推测主页地址';
-  }
-  actions.append(home);
-  const share = document.createElement('button');
-  share.type = 'button';
-  share.className = 'outline-button primary';
-  share.textContent = '分享我的经历';
-  share.addEventListener('click', () => { elements.dialog.close(); window.openJournal(person); });
-  actions.append(share);
-  if (!profile) actions.insertAdjacentHTML('afterend', '<p class="profile-note">此人物未提供可核验的知乎主页；演示画像不会跳转到无关用户。</p>');
-
+    </div>`;
   elements.dialog.showModal();
+  document.querySelector("#shareExperience").onclick = () => { elements.dialog.close(); window.openJournal(person); };
+  document.querySelector("#personTopicJournal").onclick = () => { elements.dialog.close(); window.openTopicJournal?.(person); };
   document.querySelector("#openSource").addEventListener("click", () => { const branch = state.trail?.branches.get(state.result.clusters.indexOf(cluster)); const item = branch?.people.get(person.name || person.quote?.evidenceId); if (item) item.opened = true; });
-  document.querySelector("#generateDrafts").addEventListener("click", (event) => {
-    generateDrafts(event.currentTarget, person, evidence);
-  });
+  document.querySelector("#generateDrafts").addEventListener("click", event => generateDrafts(event.currentTarget, person, evidence));
 }
 
 async function generateDrafts(button, person, evidence) {
@@ -897,7 +855,7 @@ checkHealth();
     records.forEach((record) => {
       const people = record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {});
       people.forEach((person) => {
-        const status = person.profileOpened ? "已点击主页" : "已查看人物";
+        const status = "已查看人物与内容节选";
         cards.push(`
           <article class="voyage-person-card" style="--person-color:${safeColor(record.cluster?.color)}">
             <span class="voyage-person-avatar">${avatarFor(person)}</span>
@@ -926,6 +884,83 @@ checkHealth();
         </article>
       `;
     }).join("");
+  }
+
+  // Draw a self-contained PNG. No third-party image is loaded, so export never
+  // depends on cross-origin avatar permissions or a screenshot service.
+  async function saveVoyageImage(button, records, question, mainPath) {
+    button.disabled = true; button.textContent = "正在绘制图片…";
+    try {
+      await document.fonts?.ready;
+      const canvas = document.createElement("canvas");
+      const c = canvas.getContext("2d");
+      if (!c) throw new Error("浏览器不支持图片导出");
+      const width = 1200, pad = 72, textWidth = width - pad * 2;
+      const font = '"Microsoft YaHei", "PingFang SC", sans-serif';
+      function wrap(text, maxWidth, size) {
+        c.font = size + "px " + font;
+        const lines = [];
+        String(text || "").split("\n").forEach(paragraph => {
+          let line = "";
+          for (const char of paragraph) {
+            if (line && c.measureText(line + char).width > maxWidth) { lines.push(line); line = char; }
+            else line += char;
+          }
+          lines.push(line);
+        });
+        return lines;
+      }
+      const sections = [];
+      const add = (text, size=22, color="#344f40", gap=18) => sections.push({lines:wrap(text,textWidth,size),size,color,gap});
+      add("本次探索的问题",18,"#998051",10); add(question,32,"#263f31",28);
+      add("我探索了  " + records.map(r=>r.cluster?.name || "观点岛").join(" · "),22,"#455a44",20);
+      const people = records.flatMap(r=>[...r.people.values()]);
+      add("遇到了谁  " + (people.map(p=>p.name).join("、") || "尚未打开人物卡片"),22,"#455a44",26);
+      add("见到了什么内容",25,"#263f31",18);
+      if (!people.length) add("还没有阅读人物内容。下一程，从一张人物卡片开始。",21,"#657157");
+      people.forEach(p=>{
+        const evidence=findEvidence(p.quote?.evidenceId || p.evidenceIds?.[0]);
+        add(p.name + " · " + (evidence?.title || "人物观点"),23,"#263f31",10);
+        add(p.quote?.text || evidence?.excerpt || p.viewpoint || "暂无内容节选",21,"#657157",24);
+      });
+      add("下一步  把看见变成行动：记录你的经历，或带着一个具体问题开始交流。",22,"#455a44",22);
+      const bodyHeight=sections.reduce((h,s)=>h+s.lines.length*s.size*1.65+s.gap,0);
+      canvas.width=width; canvas.height=Math.ceil(870+bodyHeight+90);
+      c.fillStyle="#f5efdf"; c.fillRect(0,0,width,canvas.height);
+      c.strokeStyle="#b49b62"; c.lineWidth=2; c.strokeRect(24,24,width-48,canvas.height-48);
+      c.strokeStyle="#d2c39c"; c.strokeRect(34,34,width-68,canvas.height-68);
+      c.fillStyle="#8c794e"; c.font="18px "+font; c.fillText("ZHILU  /  VOYAGE JOURNAL",pad,90);
+      c.fillStyle="#263f31"; c.font="46px "+font; c.fillText("你的探索航线",pad,159);
+      c.font="20px "+font; c.fillStyle="#758065";
+      c.fillText(records.length+" 座观点岛 · "+people.length+" 位相遇的人 · 一次具体的出发",pad,204);
+      c.save(); c.translate(50,250); c.beginPath(); c.rect(0,0,1100,550); c.clip();
+      c.fillStyle="#e9e8d5"; c.fillRect(0,0,1100,550);
+      c.strokeStyle="#d2d3b6"; c.lineWidth=1;
+      for(let r=70;r<1100;r+=65){c.beginPath();c.ellipse(550,180,r,r*.64,0,0,Math.PI*2);c.stroke()}
+      c.setLineDash([10,9]); c.lineWidth=4; c.strokeStyle="#8b9978"; c.stroke(new Path2D(mainPath));c.setLineDash([]);
+      records.forEach((r,i)=>{
+        const pos=layoutFor(r); c.save();c.translate(pos.x,pos.y);
+        c.fillStyle="#b7c0a0";c.strokeStyle="#909d78";c.lineWidth=3;
+        c.beginPath();c.ellipse(0,-15,72,40,-.1,0,Math.PI*2);c.fill();c.stroke();
+        c.fillStyle="#e6e5cf";c.beginPath();c.moveTo(-32,0);c.lineTo(-7,-51);c.lineTo(25,0);c.closePath();c.fill();
+        c.fillStyle="#263f31";c.font="bold 21px "+font;c.textAlign="center";
+        wrap(r.cluster?.name||"观点岛",230,21).forEach((line,n)=>c.fillText(line,0,48+n*26));
+        c.fillStyle="#fbf7eb";c.beginPath();c.arc(68,-49,15,0,Math.PI*2);c.fill();
+        c.fillStyle="#4d654d";c.font="16px "+font;c.fillText(String(i+1),68,-43);c.restore();
+      });
+      c.fillStyle="#354f40";c.beginPath();c.moveTo(538,506);c.lineTo(562,506);c.lineTo(557,517);c.lineTo(543,517);c.closePath();c.fill();
+      c.strokeStyle="#a18b52";c.beginPath();c.moveTo(550,506);c.lineTo(550,478);c.stroke();c.fillStyle="#fff8e5";c.beginPath();c.moveTo(548,480);c.lineTo(531,503);c.lineTo(548,503);c.closePath();c.fill();c.restore();
+      let y=865;
+      sections.forEach(s=>{c.font=s.size+"px "+font;c.fillStyle=s.color;s.lines.forEach(line=>{c.fillText(line,pad,y);y+=s.size*1.65});y+=s.gap});
+      c.fillStyle="#9a8860";c.font="16px "+font;c.fillText("知路 · 本次点击记录 / "+new Date().toLocaleDateString('zh-CN'),pad,canvas.height-60);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));
+      if(!blob)throw new Error("图片生成失败，请重试");
+      const url=URL.createObjectURL(blob), link=document.createElement("a");
+      link.href=url;link.download="知路-探索航线-"+new Date().toISOString().slice(0,10)+".png";
+      document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+      showToast("航线图片已生成，请在浏览器下载中查看。");
+    } catch(error) { showToast(error.message || "图片保存失败，请重试"); }
+    finally {button.disabled=false;button.textContent="保存图片 ↓";}
   }
 
   function showVoyage(nextAction) {
@@ -999,11 +1034,13 @@ checkHealth();
           <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong></div></div>
           <div class="voyage-harvest-copy">
             <p><b>我看了</b>${escapeHtml(names.join("、"))}</p>
-            <p><b>我遇见</b>${personNames.length ? escapeHtml(personNames.join("、")) : "还没有打开人物卡片"}</p>
+            <p><b>遇到了谁</b>${personNames.length ? escapeHtml(personNames.join("、")) : "还没有打开人物卡片"}</p>
+            <div class="voyage-seen-content"><b>见到了什么内容</b><ul>${people.length ? people.map(person => { const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]); return `<li><strong>${escapeHtml(person.name)} · ${escapeHtml(evidence?.title || "人物卡片中的观点")}</strong><q>${escapeHtml(person.quote?.text || evidence?.excerpt || person.viewpoint || "暂无内容节选")}</q></li>`; }).join("") : "<li>尚未打开人物内容。继续探索，读一段具体经历。</li>"}</ul></div>
             <p><b>下一步</b>${people.length ? "继续认识感兴趣的人，带着一个具体问题发起交流。" : "选择一位岛上的知友，看看 TA 的公开观点。"}</p>
           </div>
           <div class="voyage-map-actions">
             <button class="outline-button voyage-continue" type="button">继续探索</button>
+            <button class="outline-button voyage-save" type="button">保存图片 ↓</button>
             <button class="outline-button primary voyage-next" type="button">换一个问题</button>
           </div>
         </section>
@@ -1034,6 +1071,7 @@ checkHealth();
 
     dialog.querySelector(".voyage-map-close").addEventListener("click", () => finish(false));
     dialog.querySelector(".voyage-continue").addEventListener("click", () => finish(false));
+    dialog.querySelector(".voyage-save").addEventListener("click", event => saveVoyageImage(event.currentTarget, visited, question, mainPath));
     dialog.querySelector(".voyage-next").addEventListener("click", () => finish(true));
     dialog.addEventListener("cancel", (event) => { event.preventDefault(); finish(false); });
     dialog.addEventListener("click", (event) => { if (event.target === dialog) finish(false); });
