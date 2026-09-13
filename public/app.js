@@ -1,8 +1,14 @@
+import { createQuestionGlobe } from "./globe.js";
+
 const elements = {
   form: document.querySelector("#questionForm"),
   input: document.querySelector("#questionInput"),
   charCount: document.querySelector("#charCount"),
   hero: document.querySelector("#heroSection"),
+  globeStage: document.querySelector("#questionGlobeStage"),
+  globeCanvas: document.querySelector("#questionGlobeCanvas"),
+  viewpointGate: document.querySelector("#viewpointGate"),
+  viewpointGateCards: document.querySelector("#viewpointGateCards"),
   progress: document.querySelector("#progressSection"),
   progressTitle: document.querySelector("#progressTitle"),
   progressDetail: document.querySelector("#progressDetail"),
@@ -14,6 +20,10 @@ const elements = {
   coreTension: document.querySelector("#coreTension"),
   queryPills: document.querySelector("#queryPills"),
   warningBox: document.querySelector("#warningBox"),
+  viewpoint: document.querySelector("#viewpointSection"),
+  viewpointCards: document.querySelector("#viewpointCards"),
+  viewpointMapButton: document.querySelector("#viewpointMapButton"),
+  mapSection: document.querySelector(".map-section"),
   mapTitle: document.querySelector("#mapTitle"),
   islandMap: document.querySelector("#islandMap"),
   restart: document.querySelector("#restartButton"),
@@ -35,7 +45,8 @@ const state = {
   result: null,
   selectedClusterIndex: -1,
   transitioning: false,
-  progressTimer: null
+  progressTimer: null,
+  trail: null
 };
 
 function escapeHtml(value) {
@@ -46,6 +57,15 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+// Keep journal integration independent of the evolving voyage implementation.
+// Delegate at call-time so the final voyage-aware person wrapper is always used.
+window.openPerson = (...args) => openPerson(...args);
+const finishRestartWithoutJournal = finishRestart;
+finishRestart = function () {
+  window.resetJournal?.();
+  return finishRestartWithoutJournal();
+};
 
 function safeColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value)) ? value : "#2468f2";
@@ -133,30 +153,42 @@ function delay(ms) {
 }
 
 async function submitQuestion(question) {
+  window.resetJournal?.();
   const submitButton = elements.form.querySelector("button[type='submit']");
   submitButton.disabled = true;
   elements.hero.hidden = true;
   elements.results.hidden = true;
-  elements.progress.hidden = false;
+  elements.progress.hidden = true;
   elements.restart.hidden = true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  startProgress();
+  state.selectedViewpointIndex = -1;
+  showViewpointGate();
 
-  try {
-    const [response] = await Promise.all([
-      fetch("/api/explore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question })
-      }),
-      delay(1500)
-    ]);
-
+  const request = fetch("/api/explore", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question })
+  }).then(async (response) => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || "探索失败，请稍后重试。");
+    return payload;
+  });
+
+  try {
+    const payload = await request;
+    renderViewpointGate(payload.viewpoints || [], payload.clusters || []);
+    const selectedIndex = await new Promise((resolve) => { state.viewpointSelection = resolve; });
+    state.selectedViewpointIndex = selectedIndex;
+    state.viewpointSelection = null;
+    elements.viewpointGate.hidden = true;
+    document.body.classList.remove("viewpoint-mode");
+    elements.progress.hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    startProgress();
+    await delay(700);
 
     stopProgress();
     state.result = payload;
+    state.trail = { question: payload.question, branches: new Map() };
     state.selectedClusterIndex = -1;
     renderResult();
     saveRecentQuestion(question);
@@ -164,15 +196,51 @@ async function submitQuestion(question) {
     elements.progress.hidden = true;
     elements.results.hidden = false;
     elements.restart.hidden = false;
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    elements.mapSection.hidden = false;
+    await enterIsland(Math.min(selectedIndex, Math.max(0, payload.clusters.length - 1)));
+    elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     stopProgress();
     elements.progress.hidden = true;
+    elements.viewpointGate.hidden = true;
+    document.body.classList.remove("viewpoint-mode");
     elements.hero.hidden = false;
     showToast(error.message || "探索失败，请稍后重试。");
   } finally {
+    state.viewpointSelection = null;
     submitButton.disabled = false;
   }
+}
+
+function showViewpointGate() {
+  elements.viewpointGateCards.innerHTML = '<div class="viewpoint-cloud-loading">正在从知乎讨论中寻找不同的声音……</div>';
+  document.body.classList.add("viewpoint-mode");
+  elements.viewpointGate.hidden = false;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderViewpointGate(viewpoints, clusters) {
+  const fallback = clusters.flatMap((cluster, clusterIndex) => (cluster.people || []).slice(0, 2).map((person) => ({
+    id: person.quote?.evidenceId || person.id,
+    text: person.quote?.text || person.viewpoint,
+    author: { name: person.name, avatar: person.avatar, headline: person.headline },
+    clusterIndex,
+    isSynthetic: false
+  })));
+  const options = (viewpoints.length ? viewpoints : fallback).slice(0, 6);
+  elements.viewpointGateCards.innerHTML = options.length ? options.map((viewpoint) => {
+    const cluster = clusters[Number(viewpoint.clusterIndex) || 0];
+    return '<button class="viewpoint-quote-card" type="button" data-viewpoint-index="' + (Number(viewpoint.clusterIndex) || 0) + '" style="--viewpoint-color:' + safeColor(cluster?.color) + '">' +
+      '<span class="viewpoint-quote-mark" aria-hidden="true">“</span>' +
+      '<span class="viewpoint-quote-copy"><strong>' + escapeHtml(viewpoint.text) + '</strong><small>' + avatarMarkup(viewpoint.author || {}) + '<span>' + escapeHtml(viewpoint.author?.name || "知乎用户") + ' · ' + escapeHtml(viewpoint.author?.headline || "相关回答") + '</span><em>♡ ' + Number(viewpoint.voteUpCount || 0) + '</em></small></span>' +
+      '<span class="viewpoint-gate-arrow" aria-hidden="true">→</span></button>';
+  }).join("") : '<div class="viewpoint-cloud-empty">暂时没有足够可靠的观点摘录，将从完整群岛开始探索。</div>';
+
+  elements.viewpointGateCards.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (state.viewpointSelection) state.viewpointSelection(Number(button.dataset.viewpointIndex));
+    });
+  });
 }
 
 function saveRecentQuestion(question) {
@@ -187,6 +255,7 @@ function saveRecentQuestion(question) {
 
 function renderResult() {
   const result = state.result;
+  window.renderJournal?.(result);
   elements.resultQuestion.textContent = result.question;
   elements.coreTension.textContent = result.analysis?.coreTension || "正在比较不同的思考路径";
   elements.queryPills.innerHTML = (result.analysis?.searchQueries || [])
@@ -206,33 +275,119 @@ function renderResult() {
   elements.warningBox.textContent = warnings.map((warning) => warning.message).join(" ");
 
   renderIslands();
-  if (typeof renderJournal === "function") renderJournal(state.result);
+  elements.viewpoint.hidden = true;
+  const closing = document.querySelector(".closing-section") || elements.results;
+  if (closing && !closing.querySelector(".trail-trigger")) { const button = document.createElement("button"); button.type = "button"; button.className = "secondary-button trail-trigger"; button.textContent = "结束探索，查看链路树"; button.addEventListener("click", () => showTrail(() => {})); closing.insertBefore(button, closing.querySelector("#bottomRestart")); }
+}
+
+function renderViewpointChoices() {
+  const clusters = state.result?.clusters || [];
+  elements.viewpointCards.innerHTML = clusters.map((cluster, index) => `
+    <button class="viewpoint-card" type="button" data-viewpoint-index="${index}" style="--viewpoint-color:${safeColor(cluster.color)}">
+      <span class="viewpoint-number">${String(index + 1).padStart(2, "0")}</span>
+      <span class="viewpoint-card-copy">
+        <strong>${escapeHtml(cluster.name)}</strong>
+        <span>${escapeHtml(cluster.summary || "从这个角度重新看待当前问题")}</span>
+        <small>${cluster.people?.length || 0} 位代表知友 · 进入这座岛</small>
+      </span>
+      <span class="viewpoint-arrow" aria-hidden="true">→</span>
+    </button>
+  `).join("");
+
+  elements.viewpointCards.querySelectorAll("[data-viewpoint-index]").forEach((button) => {
+    button.addEventListener("click", () => enterSelectedViewpoint(Number(button.dataset.viewpointIndex)));
+  });
+}
+
+async function enterSelectedViewpoint(index) {
+  elements.viewpoint.hidden = true;
+  elements.mapSection.hidden = false;
+  elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  await delay(180);
+  enterIsland(index);
+}
+
+const islandLayouts = {
+  1: [[50, 50]],
+  2: [[25, 50], [75, 50]],
+  3: [[50, 22], [25, 76], [75, 76]],
+  4: [[25, 22], [75, 22], [25, 78], [75, 78]],
+  5: [[25, 20], [75, 20], [25, 80], [75, 80], [50, 50]]
+};
+
+// Local vector terrain: shared by each overview island and its detail scene.
+const islandCoastlines = [
+  "M45 111Q19 86 51 66Q47 36 85 44Q109 16 141 36Q174 16 190 43Q233 27 245 57Q284 53 277 85Q308 110 274 130Q286 163 249 166Q227 198 195 177Q159 207 137 184Q97 205 82 175Q41 181 49 147Q22 136 45 111Z",
+  "M39 110Q15 69 61 62Q70 28 104 42Q125 13 157 35Q202 17 222 47Q266 33 273 75Q308 95 281 124Q296 156 256 166Q249 199 211 181Q179 207 154 179Q111 203 96 175Q58 190 49 154Q23 147 39 110Z",
+  "M47 118Q21 92 48 73Q37 41 83 48Q93 19 128 40Q158 16 181 40Q215 23 235 52Q280 47 270 83Q303 110 276 138Q279 171 237 168Q219 205 184 180Q150 201 126 179Q84 196 79 169Q36 168 47 142Q27 129 47 118Z"
+];
+
+function islandTerrainMarkup(index) {
+  const coast = islandCoastlines[index % islandCoastlines.length];
+  return `<svg class="island-terrain" viewBox="0 0 320 220" aria-hidden="true" focusable="false">
+    <defs>
+      <filter id="terrain-paper-${index}" x="-20%" y="-25%" width="140%" height="150%">
+        <feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="${index + 4}" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.2" />
+      </filter>
+    </defs>
+    <g filter="url(#terrain-paper-${index})">
+      <path class="terrain-tide terrain-tide-outer" d="${coast}" />
+    <path class="terrain-tide" d="${coast}" />
+    <path class="terrain-sand" d="${coast}" />
+    <path class="terrain-shore" d="${coast}" />
+    <path class="terrain-land" d="${coast}" />
+    <g class="terrain-contours">
+      <path d="M68 103Q59 66 105 64Q137 39 168 59Q220 38 247 86Q268 124 236 151Q206 177 164 160Q108 190 79 147Z" />
+      <path d="M91 106Q77 82 117 83Q150 54 181 78Q221 63 232 105Q248 139 208 144Q175 164 145 146Q99 166 91 132Z" />
+      <path d="M113 112Q107 90 140 97Q162 76 188 98Q218 99 211 124Q178 148 154 132Q129 145 113 112Z" />
+    </g>
+    <path class="terrain-lake" d="M192 122Q209 108 228 119Q245 135 228 146Q210 153 199 140Q181 139 192 122Z" />
+    <g class="terrain-mountains"><path d="M92 110L128 58L166 111M133 115L164 73L195 117" /><path d="M116 75L128 58L141 78L131 73L125 82ZM153 88L164 73L175 91L165 85L160 94Z" /></g>
+    <g class="terrain-trees"><path d="M73 120l-8 17h16ZM87 130l-9 19h18ZM103 143l-8 17h16ZM222 68l-8 17h16ZM238 82l-8 17h16ZM213 83l-7 15h14Z" /><path d="M73 137v6M87 149v6M103 160v5M222 85v6M238 99v6M213 98v5" /></g>
+      <path class="terrain-trail" d="M117 166Q136 149 152 154T183 139" />
+      <g class="terrain-islets">
+        <path d="M35 72q-13-9-3-20q12-8 21 2q5 12-5 18q-7 5-13 0Z" />
+        <path d="M260 49q10-13 23-7q11 10 2 20q-12 8-23-1q-5-5-2-12Z" />
+        <path d="M274 161q12-7 20 3q6 11-5 17q-12 4-18-7q-2-8 3-13Z" />
+      </g>
+    </g>
+  </svg>`;
+}
+
+function mapRoutesMarkup(positions) {
+  const count = positions.length;
+  const edges = count === 5 ? [[4, 0], [4, 1], [4, 2], [4, 3]]
+    : count === 4 ? [[0, 1], [0, 2], [1, 3]]
+    : count === 3 ? [[0, 1], [0, 2]] : count === 2 ? [[0, 1]] : [];
+  return `<svg class="map-routes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">${edges.map(([from, to]) => {
+    const [x1, y1] = positions[from];
+    const [x2, y2] = positions[to];
+    return `<path d="M${x1} ${y1} Q${(x1 + x2) / 2 + 3} ${(y1 + y2) / 2 - 3} ${x2} ${y2}" />`;
+  }).join("")}</svg>`;
 }
 
 function renderIslands() {
-  elements.mapTitle.textContent = "四座岛，四种看待问题的方式";
-  elements.islandMap.className = "island-map";
-  elements.islandMap.innerHTML = `
-    <div class="map-center-note" aria-hidden="true">
-      <span>沿问题启航</span>
-      <strong>四种方向<br>四群具体的人</strong>
-    </div>
-  `;
+  elements.mapTitle.textContent = `${state.result.clusters.length} 座可探索的观点岛`;
+  elements.islandMap.className = "island-map island-layout";
+  elements.islandMap.dataset.islandCount = String(state.result.clusters.length);
+  elements.islandMap.innerHTML = `${mapRoutesMarkup(islandLayouts[state.result.clusters.length])}
+    <span class="map-compass" aria-hidden="true"><small>N</small>✧</span>`;
   state.result.clusters.forEach((cluster, index) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `island-button island-position-${index}`;
+    button.className = `island-button island-position-${index} island-variant-${index}`;
+    const [x, y] = islandLayouts[state.result.clusters.length][index];
+    button.style.setProperty("--island-x", `${x}%`);
+    button.style.setProperty("--island-y", `${y}%`);
     button.style.setProperty("--island-color", safeColor(cluster.color));
     button.setAttribute("aria-label", `探索${cluster.name}，${cluster.people?.length || 0} 位代表知友`);
     button.innerHTML = `
+      ${islandTerrainMarkup(index)}
       <span class="island-label">
-        <span class="island-number">ISLAND ${String(index + 1).padStart(2, "0")}</span>
+        <span class="island-marker" aria-hidden="true"></span>
         <strong>${escapeHtml(cluster.name)}</strong>
-        <span class="island-rule"></span>
-        <small>${escapeHtml(cluster.summary)}</small>
-        <span class="island-count">${Number(cluster.contentCount || cluster.evidenceIds?.length || 0)} 条线索 · ${cluster.people?.length || 0} 位知友</span>
       </span>
-      <span class="island-marker" aria-hidden="true"></span>
     `;
     button.addEventListener("click", () => enterIsland(index));
     elements.islandMap.append(button);
@@ -244,6 +399,7 @@ async function enterIsland(index) {
   const cluster = state.result.clusters[index];
   if (!cluster) return;
 
+  track("island", { index, name: cluster.name, summary: cluster.summary, color: safeColor(cluster.color) });
   state.transitioning = true;
   state.selectedClusterIndex = index;
   elements.islandMap.classList.add("is-transitioning");
@@ -265,10 +421,11 @@ function renderIslandScene(index) {
   const color = safeColor(cluster.color);
   const people = cluster.people || [];
   elements.mapTitle.textContent = `${cluster.name} · 点击头像认识岛上的人`;
-  elements.islandMap.className = `island-map island-scene focus-${index}`;
+  elements.islandMap.className = "island-map island-scene";
   elements.islandMap.style.setProperty("--scene-color", color);
   elements.islandMap.innerHTML = `
-    <button class="map-back-button" type="button" aria-label="返回四岛地图">
+    <div class="scene-terrain" aria-hidden="true">${islandTerrainMarkup(index)}</div>
+    <button class="map-back-button" type="button" aria-label="返回群岛地图">
       <span aria-hidden="true">←</span> 返回群岛
     </button>
     <div class="island-scene-heading">
@@ -286,6 +443,7 @@ function renderIslandScene(index) {
 
   if (!people.length) {
     layer.innerHTML = '<div class="map-empty-person">这座岛暂时没有足够可靠的人物线索。</div>';
+    requestAnimationFrame(() => elements.islandMap.classList.add("scene-ready"));
     return;
   }
 
@@ -297,18 +455,21 @@ function renderIslandScene(index) {
     node.setAttribute("aria-label", `查看${person.name}的观点`);
     node.innerHTML = `
       <span class="map-person-anchor">
-        ${avatarMarkup(person)}
+        <span class="portrait-frame">${avatarMarkup(person)}</span>
         <span class="map-person-name">
+          <span class="person-card-kicker">岛上知友 · ${String(personIndex + 1).padStart(2, "0")}</span>
           <strong class="person-name">${escapeHtml(person.name)}</strong>
           <small>${escapeHtml(person.recommendationType || "值得了解")}</small>
-          <span>${escapeHtml(person.viewpoint)}</span>
+          <span class="person-viewpoint">${escapeHtml(person.viewpoint)}</span>
         </span>
+        <i class="person-seal" aria-hidden="true">见</i>
       </span>
       <span class="map-person-thought">
+        <span class="scroll-ribbon">一纸知友名帖</span>
         <em>${escapeHtml(person.headline || "相关内容作者")}</em>
         <strong>${escapeHtml(person.viewpoint)}</strong>
         <q>${escapeHtml(person.quote?.text || "从公开内容继续了解 TA 的判断")}</q>
-        <small>点击查看原文证据与破冰话术 →</small>
+        <small>点击展开名帖，查看原文与破冰话术</small>
       </span>
     `;
     node.addEventListener("click", () => openPerson(person, cluster, color));
@@ -333,30 +494,37 @@ async function openPerson(person, cluster, color) {
   const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]);
   const sourceUrl = safeZhihuUrl(evidence?.url);
   const sourceLabel = evidence?.isSynthetic ? "打开知乎搜索" : "查看知乎原文";
+  track("person", { person, cluster, color, evidence });
 
   elements.personContent.innerHTML = `
     <div class="dialog-body" style="--person-color:${color}">
+      <div class="dialog-scroll-title">
+        <span>PERSON NOTE · 知友名帖</span>
+        <i aria-hidden="true"></i>
+        <strong>循其言，知其人</strong>
+      </div>
       <div class="dialog-person">
-        ${avatarMarkup(person)}
+        <span class="dialog-portrait">${avatarMarkup(person)}</span>
         <div>
           <h2>${escapeHtml(person.name)}</h2>
           <p>${escapeHtml(person.headline || "相关内容作者")} · ${escapeHtml(cluster.name)}</p>
         </div>
+        <span class="dialog-seal" aria-hidden="true">知<br>路</span>
       </div>
 
       <section class="dialog-section">
-        <h3>为什么推荐 TA</h3>
+        <h3><span>壹</span> 缘何相荐</h3>
         <div class="reason-box"><p>${escapeHtml(person.connectionReason)}</p></div>
       </section>
 
       <section class="dialog-section">
-        <h3>来自公开内容的交流起点</h3>
+        <h3><span>贰</span> 原文为证</h3>
         <div class="quote-box">
           <blockquote>“${escapeHtml(person.quote?.text || evidence?.excerpt || "暂无可引用内容")}”</blockquote>
           <cite>${escapeHtml(evidence?.title || "内容来源整理中")}${evidence?.isSynthetic ? " · 演示内容" : " · 内容节选"}</cite>
         </div>
         <div class="dialog-actions">
-          <a class="outline-button" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${sourceLabel}</a>
+          <a id="openSource" class="outline-button" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${sourceLabel}</a>
           <button id="generateDrafts" class="outline-button primary" type="button">生成破冰问题</button>
         </div>
       </section>
@@ -365,18 +533,32 @@ async function openPerson(person, cluster, color) {
     </div>
   `;
 
-  const profile = verifiedProfile(person.profileUrl || person.authorUrl || evidence?.authorUrl);
+  const profile = window.verifiedProfile(person.profileUrl || person.authorUrl || evidence?.authorUrl);
   const actions = elements.personContent.querySelector('.dialog-actions');
   const home = document.createElement(profile ? 'a' : 'button');
   home.className = 'outline-button';
   home.textContent = '跳转知乎主页 ↗';
-  if(profile){ home.href=profile; home.target='_blank'; home.rel='noopener noreferrer'; }
-  else { home.disabled=true; home.title='演示人物或数据未提供真实主页，不能推测主页地址'; }
+  if (profile) {
+    home.href = profile;
+    home.target = '_blank';
+    home.rel = 'noopener noreferrer';
+    home.addEventListener('click', () => { person.profileOpened = true; });
+  } else {
+    home.type = 'button';
+    home.disabled = true;
+    home.title = '演示人物或数据未提供真实主页，不能推测主页地址';
+  }
   actions.append(home);
-  const share = document.createElement('button'); share.className='outline-button primary'; share.textContent='分享我的经历';
-  share.onclick=()=>{ elements.dialog.close(); openJournal(person); }; actions.append(share);
-  if(!profile) actions.insertAdjacentHTML('afterend','<p class="profile-note">此人物未提供可核验的知乎主页；演示画像不会跳转到无关用户。</p>');
+  const share = document.createElement('button');
+  share.type = 'button';
+  share.className = 'outline-button primary';
+  share.textContent = '分享我的经历';
+  share.addEventListener('click', () => { elements.dialog.close(); window.openJournal(person); });
+  actions.append(share);
+  if (!profile) actions.insertAdjacentHTML('afterend', '<p class="profile-note">此人物未提供可核验的知乎主页；演示画像不会跳转到无关用户。</p>');
+
   elements.dialog.showModal();
+  document.querySelector("#openSource").addEventListener("click", () => { const branch = state.trail?.branches.get(state.result.clusters.indexOf(cluster)); const item = branch?.people.get(person.name || person.quote?.evidenceId); if (item) item.opened = true; });
   document.querySelector("#generateDrafts").addEventListener("click", (event) => {
     generateDrafts(event.currentTarget, person, evidence);
   });
@@ -459,6 +641,59 @@ async function copyText(text) {
   showToast("草稿已复制，发送前记得再看一遍。");
 }
 
+
+function track(type, payload) {
+  if (!state.trail) return;
+  if (type === "island") {
+    if (!state.trail.branches.has(payload.index)) state.trail.branches.set(payload.index, { ...payload, people: new Map() });
+    return;
+  }
+  const index = state.result.clusters.indexOf(payload.cluster);
+  track("island", { index, name: payload.cluster.name, summary: payload.cluster.summary, color: safeColor(payload.color) });
+  const branch = state.trail.branches.get(index);
+  const key = payload.person.name || payload.person.quote?.evidenceId;
+  const old = branch.people.get(key) || {};
+  branch.people.set(key, { ...old, name: payload.person.name, headline: payload.person.headline || "相关内容作者", avatar: payload.person.avatar, opened: old.opened || false });
+}
+
+function ensureTrailStyles() {
+  if (document.querySelector("#trail-styles")) return;
+  const style = document.createElement("style");
+  style.id = "trail-styles";
+  style.textContent = ".person-dialog:has(.trail-dialog){width:min(1060px,calc(100vw - 28px));max-width:none;background:#f5efe1;border:1px solid #b6955c;border-radius:22px;box-shadow:0 28px 80px #1d2d214d}.trail-dialog{position:relative;max-width:none;min-height:620px;padding:42px 42px 26px;background:radial-gradient(ellipse at 50% 70%,#dfe7db77 0 19%,transparent 50%),repeating-radial-gradient(ellipse at 50% 76%,transparent 0 17px,#b6925230 18px 19px,transparent 20px 33px),#f7f1e4;color:#26372c;overflow:hidden}.trail-dialog:before{content:'';position:absolute;inset:12px;border:1px solid #b692525c;pointer-events:none}.trail-dialog .eyebrow{margin:0;text-align:center;color:#6a7867;font-size:11px;letter-spacing:.18em}.trail-dialog h2{margin:9px 0 5px;text-align:center;font-family:Georgia,serif;font-size:38px;color:#263a2d}.trail-note{margin:0 auto 16px;text-align:center;color:#677363;font-size:14px}.trail-dialog .dialog-close{z-index:2;color:#435545;background:transparent}.trail-tree{position:relative;min-height:410px;padding:0 18px;overflow-x:auto}.trail-tree:before{content:'✦  探 索 航 线';position:absolute;top:4px;right:28px;color:#b69252;font-size:10px;letter-spacing:.24em}.trail-trunk{position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:2;width:min(360px,72vw);padding:15px 24px;border:1px solid #b69252;border-radius:14px;background:#334b3a;color:#fffaf0;text-align:center;box-shadow:0 5px 0 #b69252}.trail-trunk:before{content:'⛵';position:absolute;left:50%;bottom:100%;transform:translate(-50%,8px);font-size:27px}.trail-trunk:after{content:'';position:absolute;left:50%;bottom:100%;height:112px;border-left:3px dashed #687c63}.trail-trunk small{display:block;color:#ead9b5;font-size:11px;margin-bottom:4px}.trail-trunk strong{font-family:Georgia,serif;font-size:19px}.trail-branches{position:absolute;inset:40px 0 104px;display:flex;align-items:flex-end;justify-content:center;gap:24px;min-width:740px}.trail-branch{position:relative;z-index:2;width:235px;padding:18px 16px 14px;border:1px solid #b6925294;border-radius:48% 52% 44% 54% / 30% 32% 55% 50%;background:radial-gradient(circle at 50% 32%,#91a08b,#5d705b 62%,#445843);box-shadow:inset 0 0 0 5px #e8e0ce55,0 14px 24px #334b3a2b;color:#fffaf0}.trail-branch:nth-child(2){transform:translateY(-65px)}.trail-branch:before{content:'';position:absolute;left:50%;top:100%;height:94px;border-left:3px dashed #687c63}.trail-branch:nth-child(2):before{height:160px}.trail-branch:after{content:'';position:absolute;left:50%;top:calc(100% + 91px);width:calc(50% + 23px);height:3px;background:#687c63;transform:translateX(-50%);border-radius:3px}.trail-branch:nth-child(2):after{top:calc(100% + 157px)}.trail-branch>small{display:block;color:#ead9b5;text-align:center;font-size:10px;letter-spacing:.12em}.trail-branch h3{margin:6px 0 4px;text-align:center;font-family:Georgia,serif;font-size:20px}.trail-branch p{margin:0 0 12px;text-align:center;color:#edf0e7;font-size:12px;line-height:1.45}.trail-leaf{display:flex;align-items:center;gap:7px;margin-top:7px;padding:6px 8px;border:1px solid #e7dcc166;border-radius:20px;background:#faf7ed;color:#334536;box-shadow:0 4px 12px #1f342426}.trail-leaf .avatar{width:29px;height:29px;min-width:29px;background:#7b8b71;font-size:12px}.trail-leaf span{min-width:0;flex:1}.trail-leaf strong,.trail-leaf small{display:block}.trail-leaf strong{font-size:12px}.trail-leaf small{color:#687466;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.trail-leaf em{font-style:normal;color:#6a7a60;font-size:9px;white-space:nowrap}.trail-next{display:block;margin:14px 0 0 auto;border-color:#687c63;background:#425b45}@media(max-width:720px){.trail-dialog{padding:34px 20px 20px}.trail-dialog h2{font-size:30px}.trail-tree{min-height:435px;padding:0}.trail-branches{justify-content:flex-start}.trail-next{width:100%}.trail-tree:before{display:none}}";
+  document.head.append(style);
+}
+
+function ensureVoyageStyles() {
+  if (document.querySelector("#trail-voyage-styles")) return;
+  const style = document.createElement("style");
+  style.id = "trail-voyage-styles";
+  style.textContent = ".trail-route-water{position:absolute;inset:0;z-index:1;pointer-events:none}.trail-route-water:before{content:'';position:absolute;left:50%;bottom:78px;width:3px;height:122px;border-left:2px dashed #b69252;transform:translateX(-50%)}.trail-route-water:after{content:'';position:absolute;left:17%;right:17%;bottom:197px;border-top:2px dashed #b69252;opacity:.75}.trail-boat{position:absolute;z-index:5;left:50%;bottom:70px;font-size:30px;filter:drop-shadow(0 4px 3px #263a2d55);animation:trail-sail 6.2s cubic-bezier(.4,.05,.3,1) both}.trail-boat:after{content:'航向已探索的岛屿';position:absolute;top:32px;left:50%;transform:translateX(-50%);width:130px;color:#8a6b35;font-size:10px;text-align:center;letter-spacing:.08em}.trail-stop{position:absolute;z-index:4;width:10px;height:10px;border:3px solid #f7f1e4;border-radius:50%;background:#b69252;box-shadow:0 0 0 2px #667a62}.trail-stop:nth-child(2){left:27%;bottom:196px}.trail-stop:nth-child(3){left:50%;bottom:265px}.trail-stop:nth-child(4){right:27%;bottom:196px}.trail-actions{position:relative;z-index:6;margin-top:8px;padding:15px 18px;border:1px solid #b6925273;border-radius:14px;background:#fffaf0c9}.trail-actions-top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.trail-actions h3{margin:0;color:#304838;font-family:Georgia,serif;font-size:18px}.trail-actions-top small{color:#8a6b35;font-size:11px}.trail-action-list{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 12px;padding:0;list-style:none}.trail-action-list li{padding:6px 9px;border-radius:20px;background:#e7eee3;color:#415844;font-size:12px}.trail-action-list li strong{color:#294333}.trail-action-buttons{display:flex;justify-content:flex-end;gap:10px}.trail-keep{border:1px solid #687c63;background:#fffaf0;color:#3d5541}@keyframes trail-sail{0%{left:50%;bottom:70px;transform:translate(-50%,0) rotate(0deg);opacity:0}8%{opacity:1}28%{left:50%;bottom:184px;transform:translate(-50%,0) rotate(-8deg)}52%{left:27%;bottom:205px;transform:translate(-50%,0) rotate(-13deg)}76%{left:50%;bottom:274px;transform:translate(-50%,0) rotate(8deg)}100%{left:73%;bottom:205px;transform:translate(-50%,0) rotate(12deg)}}@media(max-width:720px){.trail-actions-top,.trail-action-buttons{display:block}.trail-action-buttons button{width:100%;margin-top:8px}.trail-route-water:after{left:8%;right:8%}.trail-stop:nth-child(2){left:18%}.trail-stop:nth-child(4){right:18%}.trail-boat{animation:trail-sail-mobile 5.2s ease both}@keyframes trail-sail-mobile{0%{left:50%;bottom:70px;opacity:0}10%{opacity:1}45%{left:25%;bottom:205px}100%{left:50%;bottom:274px}}}";
+  document.head.append(style);
+}
+
+function showTrail(continueExplore) {
+  ensureTrailStyles();
+  ensureVoyageStyles();
+  const branches = [...(state.trail?.branches?.values() || [])];
+  if (!branches.length) return continueExplore();
+  const peopleSeen = branches.reduce((total, branch) => total + branch.people.size, 0);
+  const profilesOpened = branches.reduce((total, branch) => total + [...branch.people.values()].filter((person) => person.opened).length, 0);
+  const dialog = document.createElement("dialog");
+  dialog.className = "person-dialog";
+  dialog.innerHTML = '<div class="dialog-body trail-dialog"><button class="dialog-close" type="button">×</button><p class="eyebrow">知路 · 探索回顾</p><h2>你的探索航线</h2><p class="trail-note">1 个问题 · ' + branches.length + ' 座观点岛 · ' + peopleSeen + ' 位知友</p><div class="trail-tree"><div class="trail-route-water" aria-hidden="true"><span class="trail-boat">⛵</span>' + branches.slice(0, 3).map(() => '<span class="trail-stop"></span>').join("") + '</div><div class="trail-trunk"><small>本次问题</small><strong>' + escapeHtml(state.trail.question) + '</strong></div><div class="trail-branches">' + branches.map((branch) => '<section class="trail-branch" style="--trail-color:' + escapeHtml(branch.color) + '"><small>已点击观点岛</small><h3>' + escapeHtml(branch.name) + '</h3><p>' + escapeHtml(branch.summary) + '</p><div>' + [...branch.people.values()].map((person) => '<article class="trail-leaf">' + avatarMarkup(person) + '<span><strong>' + escapeHtml(person.name) + '</strong><small>' + escapeHtml(person.headline) + '</small></span><em>' + (person.opened ? "已查看主页" : "已查看人物") + '</em></article>').join("") + '</div></section>').join("") + '</div></div><section class="trail-actions"><div class="trail-actions-top"><h3>本次探索收获</h3><small>把下一步留给你决定</small></div><ul class="trail-action-list"><li>看过 <strong>' + branches.length + '</strong> 座观点岛</li><li>认识 <strong>' + peopleSeen + '</strong> 位相关作者</li><li>打开 <strong>' + profilesOpened + '</strong> 个原文主页</li><li>下一步：选择一位作者，带着共同问题继续了解</li></ul><div class="trail-action-buttons"><button class="outline-button trail-keep" type="button">继续探索此问题</button><button class="outline-button primary trail-next" type="button">换一个问题</button></div></section></div>';
+  document.body.append(dialog);
+  dialog.querySelector(".dialog-close").addEventListener("click", () => dialog.close());
+  dialog.querySelector(".trail-keep").addEventListener("click", () => dialog.close());
+  dialog.querySelector(".trail-next").addEventListener("click", () => { dialog.close(); continueExplore(); });
+  dialog.showModal();
+}
+function finishRestart() {
+  if (elements.dialog.open) elements.dialog.close();
+  elements.results.hidden = true; elements.progress.hidden = true; elements.viewpointGate.hidden = true; document.body.classList.remove("viewpoint-mode"); elements.hero.hidden = false; elements.restart.hidden = true;
+  state.result = null; state.trail = null; window.scrollTo({ top: 0, behavior: "smooth" }); elements.input.focus();
+}
+
 let toastTimer;
 function showToast(message) {
   window.clearTimeout(toastTimer);
@@ -467,17 +702,7 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
 }
 
-function restart() {
-  if (elements.dialog.open) elements.dialog.close();
-  elements.results.hidden = true;
-  elements.progress.hidden = true;
-  elements.hero.hidden = false;
-  elements.restart.hidden = true;
-  state.result = null;
-  document.querySelector("#journalSection").hidden=true;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  elements.input.focus();
-}
+function restart() { showTrail(finishRestart); }
 
 elements.form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -490,11 +715,24 @@ document.querySelectorAll("[data-question]").forEach((button) => {
     elements.input.value = button.dataset.question;
     updateCharCount();
     elements.input.focus();
+    elements.globeStage?.classList.add("question-selected");
+    window.setTimeout(() => elements.globeStage?.classList.remove("question-selected"), 650);
   });
+});
+
+createQuestionGlobe({
+  canvas: elements.globeCanvas,
+  stage: elements.globeStage,
+  motionSurface: elements.hero
 });
 
 elements.restart.addEventListener("click", restart);
 elements.bottomRestart.addEventListener("click", restart);
+elements.viewpointMapButton.addEventListener("click", () => {
+  elements.viewpoint.hidden = true;
+  elements.mapSection.hidden = false;
+  elements.mapSection.scrollIntoView({ behavior: "smooth", block: "start" });
+});
 elements.closeDialog.addEventListener("click", () => elements.dialog.close());
 elements.dialog.addEventListener("click", (event) => {
   if (event.target === elements.dialog) elements.dialog.close();
@@ -502,9 +740,6 @@ elements.dialog.addEventListener("click", (event) => {
 
 updateCharCount();
 checkHealth();
-
-window.openPerson = openPerson;
-
 
 /* Voyage map modal v2 */
 (() => {
@@ -519,12 +754,11 @@ window.openPerson = openPerson;
   };
   let bypassLegacyTrail = false;
 
-  const layouts = [
-    { x: 245, y: 170, cardX: 46, cardY: 80, align: "left" },
-    { x: 842, y: 174, cardX: 734, cardY: 78, align: "right" },
-    { x: 270, y: 406, cardX: 50, cardY: 326, align: "left" },
-    { x: 832, y: 407, cardX: 724, cardY: 330, align: "right" }
-  ];
+  function layoutFor(record) {
+    const count = state.result?.clusters?.length || 1;
+    const [x, y] = islandLayouts[count]?.[record.index] || [50, 50];
+    return { x: x * 11, y: (12 + y * .66) * 5.5 };
+  }
 
   function resetVoyage() {
     voyageState.islands.clear();
@@ -652,7 +886,7 @@ window.openPerson = openPerson;
   }
 
   function avatarFor(person) {
-    const raw = person?.avatar?.url || person?.avatarUrl || person?.avatar_url || "";
+    const raw = (typeof person?.avatar === "string" ? person.avatar : person?.avatar?.url) || person?.avatarUrl || person?.avatar_url || "";
     const url = raw && typeof safeAvatarUrl === "function" ? safeAvatarUrl(raw) : "";
     if (url) return `<img src="${escapeHtml(url)}" alt="" loading="lazy">`;
     return `<span aria-hidden="true">${initials(person?.name)}</span>`;
@@ -660,14 +894,12 @@ window.openPerson = openPerson;
 
   function personCards(records) {
     const cards = [];
-    records.forEach((record, islandOrder) => {
+    records.forEach((record) => {
       const people = record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {});
-      people.slice(0, 2).forEach((person, personIndex) => {
-        const layout = layouts[record.index % layouts.length] || layouts[islandOrder % layouts.length];
-        const offsetY = personIndex * 62;
+      people.forEach((person) => {
         const status = person.profileOpened ? "已点击主页" : "已查看人物";
         cards.push(`
-          <article class="voyage-person-card ${layout.align}" style="--card-x:${(layout.cardX / 11).toFixed(2)}%;--card-y:${((layout.cardY + offsetY) / 5.5).toFixed(2)}%">
+          <article class="voyage-person-card" style="--person-color:${safeColor(record.cluster?.color)}">
             <span class="voyage-person-avatar">${avatarFor(person)}</span>
             <span class="voyage-person-copy">
               <strong>${escapeHtml(person.name || "知乎知友")}</strong>
@@ -684,10 +916,10 @@ window.openPerson = openPerson;
   function islandCards(records) {
     return records.map((record, order) => {
       const cluster = record.cluster || {};
-      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      const layout = layoutFor(record);
       return `
-        <article class="voyage-island-label" style="--island-x:${(layout.x / 11).toFixed(2)}%;--island-y:${(layout.y / 5.5).toFixed(2)}%;--island-delay:${order * 90}ms">
-          <span class="voyage-island-icon" aria-hidden="true">${order === records.length - 1 ? "⚑" : "⌁"}</span>
+        <article class="voyage-island-label" style="--island-x:${(layout.x / 11).toFixed(2)}%;--island-y:${(layout.y / 5.5).toFixed(2)}%;--island-delay:${order * 90}ms;--island-color:${safeColor(cluster.color)}">
+          ${islandTerrainMarkup(record.index)}
           <strong>${escapeHtml(cluster.name || `观点岛 ${order + 1}`)}</strong>
           <small>${escapeHtml(cluster.summary || "从不同的视角看见更多可能")}</small>
           <span>${order + 1}</span>
@@ -711,11 +943,11 @@ window.openPerson = openPerson;
     if (voyageState.dialog?.open) voyageState.dialog.close();
     ensureStyles();
 
-    const visited = records.slice(0, 4);
+    const visited = records.slice(0, 5);
     const people = visited.flatMap((record) => record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {}));
     const start = { x: 550, y: 510 };
     const routePoints = [start, ...visited.map((record, order) => {
-      const layout = layouts[record.index % layouts.length] || layouts[order % layouts.length];
+      const layout = layoutFor(record);
       return { x: layout.x, y: layout.y };
     })];
     const mainPath = routePath(routePoints);
@@ -755,7 +987,6 @@ window.openPerson = openPerson;
             </g>
           </svg>
           ${islandCards(visited)}
-          ${personCards(visited)}
           <div class="voyage-question-plaque">
             <small>本次问题</small>
             <strong>${escapeHtml(question)}</strong>
@@ -763,6 +994,7 @@ window.openPerson = openPerson;
           <p class="voyage-map-note">演示航线 · 仅展示本次点击记录</p>
         </section>
 
+        <section class="voyage-people" aria-label="本次查看的人物">${personCards(visited)}</section>
         <section class="voyage-harvest">
           <div class="voyage-harvest-title"><span aria-hidden="true">✦</span><div><small>本次探索收获</small><strong>把看见，变成下一步行动</strong></div></div>
           <div class="voyage-harvest-copy">
@@ -852,7 +1084,7 @@ window.openPerson = openPerson;
       .voyage-map-shell::before{content:"";position:absolute;inset:10px;border:1px solid rgba(151,116,58,.45);border-radius:17px;pointer-events:none}
       .voyage-map-close{position:absolute;right:30px;top:22px;z-index:20;width:44px;height:44px;border:0;background:transparent;color:#233c31;font:300 40px/1 Georgia,serif;cursor:pointer;transition:.2s}.voyage-map-close:hover{transform:rotate(8deg);color:#99723a}
       .voyage-map-header{position:relative;z-index:2;text-align:center;padding:3px 60px 13px}.voyage-map-header p{display:flex;align-items:center;justify-content:center;gap:16px;margin:0 0 3px;font-family:serif;font-size:15px;font-weight:700;letter-spacing:.22em}.voyage-map-header p span{width:60px;height:1px;background:#a9874f}.voyage-map-header h2{display:inline-flex;align-items:center;margin:2px 0 0;font-family:serif;font-size:clamp(30px,4vw,52px);line-height:1.08;letter-spacing:.08em}.voyage-map-header h2 i{width:46px;height:13px;margin-left:8px;border-top:3px solid #b59a63;border-radius:50%;transform:rotate(-9deg)}.voyage-map-header>strong{display:block;margin-top:6px;color:#695c42;font-family:serif;font-size:17px;letter-spacing:.14em}
-      .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:linear-gradient(rgba(250,244,230,.07),rgba(250,244,230,.07)),url("./zhilu-four-islands-v1.png");background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
+      .voyage-chart{position:relative;min-height:520px;border:1px solid rgba(151,116,58,.24);border-radius:14px;overflow:hidden;background-color:#f8f0dc;background-image:radial-gradient(ellipse at center,rgba(198,216,202,.38),transparent 68%);background-size:cover;background-position:center;box-shadow:inset 0 0 55px rgba(120,96,52,.13)}
       .voyage-chart::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-radial-gradient(ellipse at center,transparent 0 56px,rgba(132,111,70,.035) 58px 59px,transparent 60px 92px);mix-blend-mode:multiply}
       .voyage-quote{position:absolute;left:25px;top:19px;z-index:5;margin:0;color:#71664c;font:italic 14px/1.8 serif;letter-spacing:.08em}.voyage-compass{position:absolute;right:28px;top:16px;z-index:5;width:76px;height:76px;border:1px solid rgba(142,108,50,.55);border-radius:50%;color:#8c6c36;text-align:center;font:10px/1 serif}.voyage-compass::before,.voyage-compass::after{content:"";position:absolute;left:50%;top:8px;width:1px;height:60px;background:#9b7b43}.voyage-compass::after{transform:rotate(90deg)}.voyage-compass i{position:absolute;left:23px;top:23px;width:27px;height:27px;border:1px solid #99783f;transform:rotate(45deg);background:linear-gradient(135deg,#99783f 0 49%,transparent 50%)}.voyage-compass b{position:absolute;top:-13px;left:33px}.voyage-compass em{position:absolute;bottom:-14px;left:34px;font-style:normal}.voyage-compass span{position:absolute;left:-12px;top:34px;white-space:pre;word-spacing:54px}
       .voyage-routes{position:absolute;inset:0;z-index:4;width:100%;height:100%;overflow:visible}.voyage-branch-route{fill:none;stroke:#a47d3d;stroke-width:1.7;stroke-dasharray:7 8;opacity:.42}.voyage-main-route{fill:none;stroke:#385744;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 8;opacity:.72}.voyage-route-progress{fill:none;stroke:#c39b50;stroke-width:6;stroke-linecap:round;filter:drop-shadow(0 1px 2px rgba(54,63,43,.35))}.voyage-stop circle:first-child{fill:#f7efdb;stroke:#385744;stroke-width:3}.voyage-stop circle:nth-child(2){fill:#b6904c}.voyage-stop text{fill:#314c3d;font:700 13px serif;text-anchor:middle}.voyage-ship{filter:drop-shadow(0 5px 4px rgba(33,50,40,.32));transform-box:fill-box;transform-origin:center}.ship-hull{fill:#233f32;stroke:#f0dfb1;stroke-width:1.4}.ship-mast{fill:none;stroke:#263f32;stroke-width:2.4}.ship-sail-a{fill:#f7eed6;stroke:#263f32;stroke-width:1.3}.ship-sail-b{fill:#526b55;stroke:#263f32;stroke-width:1.2}.ship-flag{fill:#b78f48}
@@ -881,5 +1113,3 @@ window.openPerson = openPerson;
   if (typeof showTrail !== "undefined") showTrail = showVoyage;
   ensureStyles();
 })();
-
-window.openPerson = openPerson;
