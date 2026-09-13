@@ -58,6 +58,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+// Keep journal integration independent of the evolving voyage implementation.
+// Delegate at call-time so the final voyage-aware person wrapper is always used.
+window.openPerson = (...args) => openPerson(...args);
+const finishRestartWithoutJournal = finishRestart;
+finishRestart = function () {
+  window.resetJournal?.();
+  return finishRestartWithoutJournal();
+};
+
 function safeColor(value) {
   return /^#[0-9a-f]{6}$/i.test(String(value)) ? value : "#2468f2";
 }
@@ -144,6 +153,7 @@ function delay(ms) {
 }
 
 async function submitQuestion(question) {
+  window.resetJournal?.();
   const submitButton = elements.form.querySelector("button[type='submit']");
   submitButton.disabled = true;
   elements.hero.hidden = true;
@@ -245,6 +255,7 @@ function saveRecentQuestion(question) {
 
 function renderResult() {
   const result = state.result;
+  window.renderJournal?.(result);
   elements.resultQuestion.textContent = result.question;
   elements.coreTension.textContent = result.analysis?.coreTension || "正在比较不同的思考路径";
   elements.queryPills.innerHTML = (result.analysis?.searchQueries || [])
@@ -521,6 +532,30 @@ async function openPerson(person, cluster, color) {
       <section id="icebreakerArea" class="icebreaker-area" hidden></section>
     </div>
   `;
+
+  const profile = window.verifiedProfile(person.profileUrl || person.authorUrl || evidence?.authorUrl);
+  const actions = elements.personContent.querySelector('.dialog-actions');
+  const home = document.createElement(profile ? 'a' : 'button');
+  home.className = 'outline-button';
+  home.textContent = '跳转知乎主页 ↗';
+  if (profile) {
+    home.href = profile;
+    home.target = '_blank';
+    home.rel = 'noopener noreferrer';
+    home.addEventListener('click', () => { person.profileOpened = true; });
+  } else {
+    home.type = 'button';
+    home.disabled = true;
+    home.title = '演示人物或数据未提供真实主页，不能推测主页地址';
+  }
+  actions.append(home);
+  const share = document.createElement('button');
+  share.type = 'button';
+  share.className = 'outline-button primary';
+  share.textContent = '分享我的经历';
+  share.addEventListener('click', () => { elements.dialog.close(); window.openJournal(person); });
+  actions.append(share);
+  if (!profile) actions.insertAdjacentHTML('afterend', '<p class="profile-note">此人物未提供可核验的知乎主页；演示画像不会跳转到无关用户。</p>');
 
   elements.dialog.showModal();
   document.querySelector("#openSource").addEventListener("click", () => { const branch = state.trail?.branches.get(state.result.clusters.indexOf(cluster)); const item = branch?.people.get(person.name || person.quote?.evidenceId); if (item) item.opened = true; });

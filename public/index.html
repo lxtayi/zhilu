@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="知路：从一个问题出发，找到和你有话可说的人。">
     <title>知路｜从问题到值得认识的人</title>
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./journal.css">
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -19,6 +20,7 @@
         <span class="brand-tagline">沿观点航线，遇见具体的人</span>
       </a>
       <div class="header-actions">
+        <button class="text-button" id="navJournal" type="button">航海日志 ↗</button>
         <span id="modeBadge" class="mode-badge">正在检查服务</span>
         <button id="restartButton" class="text-button" type="button" hidden>重新探索</button>
       </div>
@@ -183,13 +185,19 @@
           </div>
         </section>
 
+        <div class="journal-entrance">
+          <div><span class="eyebrow">02 · THE VOYAGE CONTINUES</span><h3>看见别人的判断，也留下自己的航迹。</h3><p>把真实经历留在同一个问题下，遇见愿意回应的人。</p></div>
+          <button id="enterJournal" class="primary-button" type="button">进入航海日志 →</button>
+        </div>
         <section class="closing-section">
           <p class="eyebrow">一次探索的终点</p>
           <h3>找到至少一个<br><span>“我想进一步了解的人”</span></h3>
           <button id="bottomRestart" class="secondary-button" type="button">换一个问题继续探索</button>
         </section>
       </section>
+      <section id="journalSection" class="shell journal-section" hidden></section>
     </main>
+    <dialog id="journalDialog" class="journal-dialog"></dialog>
 
     <dialog id="personDialog" class="person-dialog">
       <button id="closeDialog" class="dialog-close" type="button" aria-label="关闭人物详情">×</button>
@@ -204,6 +212,7 @@
       <span>知乎黑客松 2026 · 社区连接与兴趣社交</span>
     </footer>
 
-    <script type="module" src="/app.js"></script>
+    <script src="./journal.js"></script>
+    <script type="module" src="./app.js"></script>
   </body>
 </html>
