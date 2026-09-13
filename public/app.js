@@ -1,8 +1,12 @@
+import { createQuestionGlobe } from "./globe.js";
+
 const elements = {
   form: document.querySelector("#questionForm"),
   input: document.querySelector("#questionInput"),
   charCount: document.querySelector("#charCount"),
   hero: document.querySelector("#heroSection"),
+  globeStage: document.querySelector("#questionGlobeStage"),
+  globeCanvas: document.querySelector("#questionGlobeCanvas"),
   viewpointGate: document.querySelector("#viewpointGate"),
   viewpointGateCards: document.querySelector("#viewpointGateCards"),
   progress: document.querySelector("#progressSection"),
@@ -681,27 +685,11 @@ document.querySelectorAll("[data-question]").forEach((button) => {
   });
 });
 
-if (elements.globeStage && elements.hero && window.matchMedia("(pointer:fine)").matches) {
-  elements.hero.addEventListener("pointermove", (event) => {
-    const bounds = elements.hero.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) / bounds.width - 0.5;
-    const y = (event.clientY - bounds.top) / bounds.height - 0.5;
-    elements.globeStage.style.setProperty("--globe-tilt-x", `${(-y * 18).toFixed(2)}deg`);
-    elements.globeStage.style.setProperty("--globe-tilt-y", `${(x * 30).toFixed(2)}deg`);
-    elements.globeStage.style.setProperty("--globe-shift-x", `${(x * 12).toFixed(2)}px`);
-    elements.globeStage.style.setProperty("--globe-shift-y", `${(y * 9).toFixed(2)}px`);
-    elements.globeStage.style.setProperty("--globe-light-x", `${(-x * 20).toFixed(2)}px`);
-    elements.globeStage.style.setProperty("--globe-light-y", `${(-y * 14).toFixed(2)}px`);
-  });
-  elements.hero.addEventListener("pointerleave", () => {
-    elements.globeStage.style.removeProperty("--globe-tilt-x");
-    elements.globeStage.style.removeProperty("--globe-tilt-y");
-    elements.globeStage.style.removeProperty("--globe-shift-x");
-    elements.globeStage.style.removeProperty("--globe-shift-y");
-    elements.globeStage.style.removeProperty("--globe-light-x");
-    elements.globeStage.style.removeProperty("--globe-light-y");
-  });
-}
+createQuestionGlobe({
+  canvas: elements.globeCanvas,
+  stage: elements.globeStage,
+  motionSurface: elements.hero
+});
 
 elements.restart.addEventListener("click", restart);
 elements.bottomRestart.addEventListener("click", restart);
