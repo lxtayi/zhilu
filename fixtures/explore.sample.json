@@ -1,0 +1,26 @@
+{
+  "question": "技术转 AI 产品值得吗？",
+  "analysis": {
+    "topic": "技术转 AI 产品值得吗",
+    "coreTension": "围绕转型比较机会、能力、风险和路径",
+    "searchQueries": [
+      "技术转 AI 产品",
+      "程序员转 AI 产品经理真实经验",
+      "技术转产品风险成本",
+      "AI 产品经理能力要求"
+    ]
+  },
+  "clusters": [
+    {
+      "id": "opportunity",
+      "name": "机会价值岛",
+      "summary": "关注选择可能带来的新增价值、成长空间和趋势机会。",
+      "evidenceIds": ["demo_content_1"],
+      "people": []
+    }
+  ],
+  "evidence": [],
+  "status": "succeeded",
+  "mode": "demo",
+  "warnings": []
+}

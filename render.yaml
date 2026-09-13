@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: zhilu-mvp
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: ZHIHU_DATA_MODE
+        value: auto
+      - key: ZHIHU_ACCESS_SECRET
+        sync: false
