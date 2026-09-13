@@ -16,7 +16,7 @@ const CITIES = [
   { lat: 40.7, lon: -74 }, { lat: -33.9, lon: 151.2 }
 ];
 
-const ROUTES = [[0, 3], [0, 4], [1, 5], [2, 7], [3, 6]];
+const ROUTES = [[0, 4], [1, 5], [3, 6]];
 
 function seededRandom(seed) {
   let value = seed >>> 0;
@@ -98,6 +98,8 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   if (!context) return () => {};
 
   const questions = [...stage.querySelectorAll(".floating-question")];
+  const previewIndex = stage.querySelector("#globeQuestionIndex");
+  const previewText = stage.querySelector("#globeQuestionText");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const state = {
     width: 0, height: 0, radius: 0, frame: 0,
@@ -129,13 +131,13 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   function drawGrid() {
     context.save();
     context.lineWidth = .72;
-    for (let latitude = -60; latitude <= 60; latitude += 20) {
+    for (let latitude = -60; latitude <= 60; latitude += 30) {
       context.strokeStyle = latitude === 0 ? "rgba(231,225,199,.24)" : "rgba(231,225,199,.14)";
       const points = [];
       for (let longitude = -180; longitude <= 180; longitude += 3) points.push([latitude, longitude]);
       strokeVisible(context, points, project);
     }
-    for (let longitude = -180; longitude < 180; longitude += 30) {
+    for (let longitude = -180; longitude < 180; longitude += 45) {
       context.strokeStyle = "rgba(231,225,199,.14)";
       const points = [];
       for (let latitude = -90; latitude <= 90; latitude += 2) points.push([latitude, longitude]);
@@ -247,9 +249,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     context.beginPath();
     context.arc(centerX, centerY, state.radius + 7, 0, Math.PI * 2);
     context.stroke();
-    for (let angle = 0; angle < 360; angle += 6) {
+    for (let angle = 0; angle < 360; angle += 12) {
       const radians = angle * DEG;
-      const major = angle % 30 === 0;
+      const major = angle % 36 === 0;
       const start = state.radius + (major ? 3 : 5);
       const end = state.radius + (major ? 11 : 8);
       context.beginPath();
@@ -369,6 +371,19 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     questions.forEach((question) => { question.style.translate = "0 0"; });
   }
 
+  function activateQuestion(question) {
+    const index = questions.indexOf(question);
+    if (index < 0) return;
+    questions.forEach((item) => {
+      const active = item === question;
+      item.classList.toggle("is-active", active);
+      if (active) item.setAttribute("aria-current", "true");
+      else item.removeAttribute("aria-current");
+    });
+    if (previewIndex) previewIndex.textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
+    if (previewText) previewText.textContent = question.dataset.question || question.textContent.trim();
+  }
+
   resize();
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
@@ -378,6 +393,12 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   canvas.addEventListener("pointermove", drag);
   canvas.addEventListener("pointerup", stopDrag);
   canvas.addEventListener("pointercancel", stopDrag);
+  questions.forEach((question) => {
+    question.addEventListener("pointerenter", () => activateQuestion(question));
+    question.addEventListener("focus", () => activateQuestion(question));
+    question.addEventListener("click", () => activateQuestion(question));
+  });
+  activateQuestion(questions[0]);
   state.frame = requestAnimationFrame(draw);
 
   return () => {
