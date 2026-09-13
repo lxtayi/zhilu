@@ -10,6 +10,12 @@ const CITIES = [
 ];
 
 const ROUTES = [[0, 4], [1, 5]];
+const QUESTION_ANCHORS = [
+  { lat: 34, lon: -105 }, { lat: -12, lon: 80 },
+  { lat: 52, lon: 20 }, { lat: 8, lon: 140 },
+  { lat: -38, lon: -45 }, { lat: 22, lon: 45 },
+  { lat: -7, lon: -135 }, { lat: 43, lon: 105 }
+];
 
 function seededRandom(seed) {
   let value = seed >>> 0;
@@ -68,10 +74,11 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   const previewText = stage.querySelector("#globeQuestionText");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const state = {
-    width: 0, height: 0, radius: 0, frame: 0,
+    width: 0, height: 0, radius: 0, canvasLeft: 0, canvasTop: 0, frame: 0,
     yaw: -.46, pitch: -.08, velocityX: 0, velocityY: 0,
     hoverX: 0, hoverY: 0, targetHoverX: 0, targetHoverY: 0,
-    dragging: false, pointerId: null, lastX: 0, lastY: 0, lastTime: 0
+    dragging: false, pointerId: null, lastX: 0, lastY: 0, lastTime: 0,
+    focusedIndex: -1, focusYaw: 0, focusPitch: 0
   };
 
   function resize() {
@@ -80,6 +87,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     state.width = Math.max(1, bounds.width);
     state.height = Math.max(1, bounds.height);
     state.radius = Math.min(state.width, state.height) * .465;
+    const stageBounds = stage.getBoundingClientRect();
+    state.canvasLeft = bounds.left - stageBounds.left;
+    state.canvasTop = bounds.top - stageBounds.top;
     canvas.width = Math.round(state.width * ratio);
     canvas.height = Math.round(state.height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -203,14 +213,38 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     context.restore();
   }
 
+  function positionQuestions() {
+    questions.forEach((question, index) => {
+      const anchor = QUESTION_ANCHORS[index % QUESTION_ANCHORS.length];
+      const point = project(anchor.lat, anchor.lon);
+      const frontDepth = Math.max(0, point.z);
+      const scale = .76 + frontDepth * .24;
+      question.style.left = `${state.canvasLeft + point.x}px`;
+      question.style.top = `${state.canvasTop + point.y}px`;
+      question.style.setProperty("--depth-scale", scale.toFixed(3));
+      question.style.opacity = (.28 + (point.z + 1) * .34).toFixed(3);
+      question.style.zIndex = question.classList.contains("is-active") ? "12" : String(4 + Math.round(frontDepth * 4));
+      question.classList.toggle("is-left", point.x < state.width / 2);
+      question.classList.toggle("is-behind", point.z < 0);
+    });
+  }
+
   function draw(now) {
     state.hoverX += (state.targetHoverX - state.hoverX) * .045;
     state.hoverY += (state.targetHoverY - state.hoverY) * .045;
     if (!state.dragging && !reducedMotion.matches) {
-      state.yaw += .00018 + state.velocityX;
-      state.pitch = Math.max(-.6, Math.min(.6, state.pitch + state.velocityY));
-      state.velocityX *= .955;
-      state.velocityY *= .92;
+      if (state.focusedIndex >= 0) {
+        const yawDistance = Math.atan2(Math.sin(state.focusYaw - state.yaw), Math.cos(state.focusYaw - state.yaw));
+        const pitchDistance = state.focusPitch - state.pitch;
+        state.yaw += yawDistance * .07;
+        state.pitch += pitchDistance * .07;
+        if (Math.abs(yawDistance) < .001 && Math.abs(pitchDistance) < .001) state.focusedIndex = -1;
+      } else {
+        state.yaw += .00018 + state.velocityX;
+        state.pitch = Math.max(-.6, Math.min(.6, state.pitch + state.velocityY));
+        state.velocityX *= .955;
+        state.velocityY *= .92;
+      }
     }
     if (document.hidden || motionSurface.hidden) {
       state.frame = requestAnimationFrame(draw);
@@ -253,6 +287,7 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     context.fillRect(0, 0, state.width, state.height);
     context.restore();
     drawBezel();
+    positionQuestions();
     state.yaw = yawBeforeHover;
     state.pitch = pitchBeforeHover;
     state.frame = requestAnimationFrame(draw);
@@ -273,6 +308,7 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     state.lastTime = performance.now();
     state.velocityX = 0;
     state.velocityY = 0;
+    state.focusedIndex = -1;
     canvas.classList.add("is-dragging");
     canvas.setPointerCapture(event.pointerId);
   }
@@ -317,6 +353,19 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     if (previewText) previewText.textContent = question.dataset.question || question.textContent.trim();
   }
 
+  function focusQuestion(question) {
+    const index = questions.indexOf(question);
+    const anchor = QUESTION_ANCHORS[index % QUESTION_ANCHORS.length];
+    if (!anchor) return;
+    const targetYaw = .23 - anchor.lon * DEG;
+    const yawDistance = Math.atan2(Math.sin(targetYaw - state.yaw), Math.cos(targetYaw - state.yaw));
+    state.focusYaw = state.yaw + yawDistance;
+    state.focusPitch = Math.max(-.55, Math.min(.55, -anchor.lat * DEG));
+    state.focusedIndex = index;
+    state.velocityX = 0;
+    state.velocityY = 0;
+  }
+
   resize();
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
@@ -327,8 +376,8 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   canvas.addEventListener("pointerup", stopDrag);
   canvas.addEventListener("pointercancel", stopDrag);
   questions.forEach((question) => {
-    question.addEventListener("focus", () => activateQuestion(question));
-    question.addEventListener("click", () => activateQuestion(question));
+    question.addEventListener("focus", () => { activateQuestion(question); focusQuestion(question); });
+    question.addEventListener("click", () => { activateQuestion(question); focusQuestion(question); });
   });
   state.frame = requestAnimationFrame(draw);
 
