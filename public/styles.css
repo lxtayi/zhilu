@@ -354,3 +354,24 @@ body.viewpoint-mode footer { display:none; }
 .island-variant-3 .terrain-trees { transform:translateX(8px); }
 .island-variant-3 .terrain-lake { opacity:.6; }
 .island-button:hover .island-label { transform:translateY(-3px); box-shadow:0 10px 22px rgba(64,54,33,.15); }
+
+/* Portrait-style person note: three primary actions, responsive long card. */
+.person-dialog{width:min(560px,calc(100vw - 28px));border-radius:26px;max-height:calc(100dvh - 30px);overflow:auto;background:#f6efdf}
+.person-dialog::before,.person-dialog::after{display:none}
+.person-dialog .dialog-body{padding:34px 30px 30px;background:radial-gradient(ellipse at 50% 14%,#c8ceb74f,transparent 42%),repeating-radial-gradient(ellipse at 0 20%,transparent 0 26px,#ac9a7220 27px,transparent 28px 38px),#f8f1e2}
+.person-dialog .dialog-body::before{inset:12px;border-radius:18px}
+.person-dialog .dialog-scroll-title{font-size:9px;letter-spacing:.14em;padding-right:28px;margin-bottom:24px}
+.person-dialog .dialog-person{flex-direction:column;align-items:center;text-align:center;gap:16px;padding:0 0 18px;border:0}
+.person-dialog .dialog-portrait{width:144px;height:144px;padding:7px;border:2px solid #b49458;box-shadow:0 0 0 4px #fff9e6,inset 0 0 0 3px #fbf4e5}
+.person-dialog .dialog-portrait .avatar{width:124px;height:124px;font-size:46px;object-fit:cover}
+.person-dialog .dialog-person h2{font-size:32px;letter-spacing:.08em}
+.person-dialog .dialog-person p{margin:8px 0;font-size:14px}.person-island-name{color:#957541;font-size:12px}
+.person-dialog .dialog-section{margin-top:6px}.person-dialog .quote-box{padding:22px 18px;text-align:center;border:1px solid #baa37665;border-radius:18px;background:#fffaf077}
+.person-dialog .quote-box blockquote{font:500 19px/1.7 var(--serif);margin:0 0 14px}.person-dialog .quote-box cite{display:block;font-size:11px;line-height:1.7}
+.person-dialog .person-primary-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.person-dialog .person-primary-actions .outline-button{padding:12px 4px;font-size:12px;min-height:50px;border-radius:18px;display:flex;align-items:center;justify-content:center;text-align:center}
+.person-context{text-align:center;border-top:1px solid #c6b48b;margin-top:25px;padding-top:14px}.person-context>span{color:#a38c57;font-size:21px}
+.person-context h3,.person-log-preview h3{font:600 15px var(--serif);margin:8px 0}.person-context p{font:13px/1.8 var(--serif);color:var(--ink-soft)}
+.person-log-preview{border:1px solid #b7a27666;border-radius:16px;padding:16px 18px;margin-top:18px;background:#fffaf066}.person-log-preview>p{font:13px/1.7 var(--serif);margin:8px 0}.person-log-preview .text-button{color:#345446}
+.header-actions #navJournal{border:1px solid #9d8958;border-radius:24px;padding:10px 16px;white-space:nowrap;background:#f8f0dfaa;color:#304737}
+@media(max-width:480px){.person-dialog .dialog-body{padding:34px 22px 24px}.person-dialog .person-primary-actions .outline-button{font-size:11px}.person-dialog .dialog-portrait{width:128px;height:128px}.person-dialog .dialog-portrait .avatar{width:108px;height:108px}.header-actions #navJournal{padding:8px 11px}}

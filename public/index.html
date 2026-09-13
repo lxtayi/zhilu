@@ -20,7 +20,7 @@
         <span class="brand-tagline">沿观点航线，遇见具体的人</span>
       </a>
       <div class="header-actions">
-        <button class="text-button" id="navJournal" type="button">航海日志 ↗</button>
+        <button class="text-button" id="navJournal" type="button">我的航海日志 ↗</button>
         <span id="modeBadge" class="mode-badge">正在检查服务</span>
         <button id="restartButton" class="text-button" type="button" hidden>重新探索</button>
       </div>
@@ -185,8 +185,13 @@
           </div>
         </section>
 
+        <div class="voyage-bridge" aria-label="从观点探索到航海日志">
+          <span class="bridge-route" aria-hidden="true">⌄</span><p>探索完岛屿，去航海日志留下你的航迹 →</p>
+          <ol class="voyage-steps"><li><span>01</span> 🗺️ 探索观点岛</li><li><span>02</span> ✍️ 记录你的经历</li><li><span>03</span> 💬 遇见回应</li></ol>
+        </div>
         <div class="journal-entrance">
-          <div><span class="eyebrow">02 · THE VOYAGE CONTINUES</span><h3>看见别人的判断，也留下自己的航迹。</h3><p>把真实经历留在同一个问题下，遇见愿意回应的人。</p></div>
+          <p class="journal-entrance-lead">探索完毕，进入航海日志 ↓</p>
+          <div><span class="eyebrow">02 · THE VOYAGE CONTINUES</span><h3>从一个问题出发，留下你的这一程。</h3><p>把真实经历留在同一个问题下，遇见愿意交换经验的人。</p></div>
           <button id="enterJournal" class="primary-button" type="button">进入航海日志 →</button>
         </div>
         <section class="closing-section">
@@ -195,8 +200,9 @@
           <button id="bottomRestart" class="secondary-button" type="button">换一个问题继续探索</button>
         </section>
       </section>
-      <section id="journalSection" class="shell journal-section" hidden></section>
+      
     </main>
+    <dialog id="journalPanel" class="journal-panel" aria-labelledby="journalPanelTitle"><button id="closeJournalPanel" class="dialog-close" type="button" aria-label="关闭航海日志">×</button><section id="journalSection" class="journal-section"></section></dialog>
     <dialog id="journalDialog" class="journal-dialog"></dialog>
 
     <dialog id="personDialog" class="person-dialog">
