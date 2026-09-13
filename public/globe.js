@@ -1,13 +1,6 @@
-const DEG = Math.PI / 180;
+import { COASTLINES, LAND_DOTS } from "./world-data.js";
 
-const LANDMASSES = [
-  [[72,-168],[68,-135],[58,-121],[50,-92],[52,-66],[34,-76],[17,-88],[18,-109],[33,-124],[54,-148]],
-  [[13,-81],[5,-75],[-7,-78],[-20,-69],[-39,-63],[-54,-70],[-35,-52],[-11,-48],[3,-55]],
-  [[70,-12],[72,34],[65,74],[68,122],[55,154],[37,141],[21,112],[9,80],[24,55],[18,34],[37,22],[45,-8]],
-  [[36,-17],[36,18],[24,40],[3,43],[-20,34],[-36,19],[-31,1],[-7,-16],[14,-17]],
-  [[-12,112],[-18,146],[-38,153],[-44,132],[-30,114]],
-  [[82,-52],[72,-24],[61,-42],[64,-62]]
-];
+const DEG = Math.PI / 180;
 
 const CITIES = [
   { lat: 39.9, lon: 116.4 }, { lat: 31.2, lon: 121.5 },
@@ -16,7 +9,7 @@ const CITIES = [
   { lat: 40.7, lon: -74 }, { lat: -33.9, lon: 151.2 }
 ];
 
-const ROUTES = [[0, 4], [1, 5], [3, 6]];
+const ROUTES = [[0, 4], [1, 5]];
 
 function seededRandom(seed) {
   let value = seed >>> 0;
@@ -26,33 +19,6 @@ function seededRandom(seed) {
   };
 }
 
-function pointInPolygon(latitude, longitude, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const yi = polygon[i][0]; const xi = polygon[i][1];
-    const yj = polygon[j][0]; const xj = polygon[j][1];
-    if (((yi > latitude) !== (yj > latitude)) &&
-      longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
-
-function buildLandDots() {
-  const random = seededRandom(20260913);
-  const dots = [];
-  for (let latitude = -58; latitude <= 82; latitude += 2.15) {
-    for (let longitude = -178; longitude <= 178; longitude += 2.15) {
-      const lat = latitude + (random() - .5) * 1.55;
-      const lon = longitude + (random() - .5) * 1.55;
-      if (LANDMASSES.some((land) => pointInPolygon(lat, lon, land))) {
-        dots.push({ lat, lon, size: .44 + random() * 1.05, tone: random() });
-      }
-    }
-  }
-  return dots;
-}
-
-const LAND_DOTS = buildLandDots();
 const PAPER_SPECKS = Array.from({ length: 280 }, (_, index) => {
   const random = seededRandom(index * 97 + 31);
   const angle = random() * Math.PI * 2;
@@ -131,13 +97,13 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   function drawGrid() {
     context.save();
     context.lineWidth = .72;
-    for (let latitude = -60; latitude <= 60; latitude += 30) {
+    for (let latitude = -45; latitude <= 45; latitude += 45) {
       context.strokeStyle = latitude === 0 ? "rgba(231,225,199,.24)" : "rgba(231,225,199,.14)";
       const points = [];
       for (let longitude = -180; longitude <= 180; longitude += 3) points.push([latitude, longitude]);
       strokeVisible(context, points, project);
     }
-    for (let longitude = -180; longitude < 180; longitude += 45) {
+    for (let longitude = -180; longitude < 180; longitude += 60) {
       context.strokeStyle = "rgba(231,225,199,.14)";
       const points = [];
       for (let latitude = -90; latitude <= 90; latitude += 2) points.push([latitude, longitude]);
@@ -151,35 +117,20 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     [false, true].forEach((lightTone) => {
       context.beginPath();
       LAND_DOTS.forEach((dot) => {
-        if ((dot.tone > .82) !== lightTone) return;
-        const point = project(dot.lat, dot.lon);
+        if (Boolean(dot[3]) !== lightTone) return;
+        const point = project(dot[0], dot[1]);
         if (point.z <= .015) return;
-        const size = dot.size * (.38 + point.z * .62);
+        const size = dot[2] * (.38 + point.z * .62);
         context.moveTo(point.x + size, point.y);
         context.arc(point.x, point.y, size, 0, Math.PI * 2);
       });
-      context.fillStyle = lightTone ? "rgba(214,203,158,.48)" : "rgba(43,58,44,.74)";
+      context.fillStyle = lightTone ? "rgba(247,239,207,.62)" : "rgba(43,63,49,.7)";
       context.fill();
     });
 
-    context.lineWidth = .65;
-    context.strokeStyle = "rgba(228,218,178,.35)";
-    LANDMASSES.forEach((land) => {
-      const points = [];
-      for (let index = 0; index < land.length; index += 1) {
-        const current = land[index];
-        const next = land[(index + 1) % land.length];
-        for (let step = 0; step < 10; step += 1) {
-          const amount = step / 10;
-          points.push([
-            current[0] + (next[0] - current[0]) * amount,
-            interpolateLongitude(current[1], next[1], amount)
-          ]);
-        }
-      }
-      points.push(land[0]);
-      strokeVisible(context, points, project);
-    });
+    context.lineWidth = .58;
+    context.strokeStyle = "rgba(241,232,199,.38)";
+    COASTLINES.forEach((coastline) => strokeVisible(context, coastline, project));
     context.restore();
   }
 
@@ -240,27 +191,15 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   function drawBezel() {
     const centerX = state.width / 2; const centerY = state.height / 2;
     context.save();
-    context.strokeStyle = "rgba(52,68,55,.68)";
+    context.strokeStyle = "rgba(52,68,55,.5)";
     context.lineWidth = 1;
     context.beginPath();
     context.arc(centerX, centerY, state.radius + 1, 0, Math.PI * 2);
     context.stroke();
-    context.strokeStyle = "rgba(111,94,62,.28)";
+    context.strokeStyle = "rgba(111,94,62,.18)";
     context.beginPath();
     context.arc(centerX, centerY, state.radius + 7, 0, Math.PI * 2);
     context.stroke();
-    for (let angle = 0; angle < 360; angle += 12) {
-      const radians = angle * DEG;
-      const major = angle % 36 === 0;
-      const start = state.radius + (major ? 3 : 5);
-      const end = state.radius + (major ? 11 : 8);
-      context.beginPath();
-      context.moveTo(centerX + Math.cos(radians) * start, centerY + Math.sin(radians) * start);
-      context.lineTo(centerX + Math.cos(radians) * end, centerY + Math.sin(radians) * end);
-      context.strokeStyle = major ? "rgba(96,76,42,.48)" : "rgba(96,76,42,.2)";
-      context.lineWidth = major ? .8 : .55;
-      context.stroke();
-    }
     context.restore();
   }
 
@@ -294,10 +233,10 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       state.radius * .04,
       centerX, centerY, state.radius * 1.12
     );
-    ocean.addColorStop(0, "#98a28f");
-    ocean.addColorStop(.38, "#738577");
-    ocean.addColorStop(.73, "#50675a");
-    ocean.addColorStop(1, "#33493e");
+    ocean.addColorStop(0, "#d3d4bd");
+    ocean.addColorStop(.38, "#a7b29f");
+    ocean.addColorStop(.73, "#788e7c");
+    ocean.addColorStop(1, "#536b5c");
     context.fillStyle = ocean;
     context.fillRect(0, 0, state.width, state.height);
     drawGrid();
@@ -306,10 +245,10 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     drawMarkers(now);
     drawPaperSpecks();
     const shade = context.createLinearGradient(centerX - state.radius, 0, centerX + state.radius, 0);
-    shade.addColorStop(0, "rgba(20,36,29,.12)");
-    shade.addColorStop(.24, "rgba(255,249,220,.1)");
+    shade.addColorStop(0, "rgba(20,36,29,.06)");
+    shade.addColorStop(.24, "rgba(255,249,220,.14)");
     shade.addColorStop(.62, "rgba(255,255,255,0)");
-    shade.addColorStop(1, "rgba(15,28,22,.4)");
+    shade.addColorStop(1, "rgba(15,28,22,.24)");
     context.fillStyle = shade;
     context.fillRect(0, 0, state.width, state.height);
     context.restore();
@@ -323,11 +262,6 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     const bounds = motionSurface.getBoundingClientRect();
     state.targetHoverX = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - .5) * 2));
     state.targetHoverY = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - .5) * 2));
-    questions.forEach((question, index) => {
-      const depth = .2 + (index % 4) * .07;
-      const direction = index % 2 === 0 ? 1 : -1;
-      question.style.translate = `${(state.targetHoverX * 7 * depth * direction).toFixed(2)}px ${(state.targetHoverY * 5 * depth).toFixed(2)}px`;
-    });
   }
 
   function startDrag(event) {
@@ -368,7 +302,6 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   function leave() {
     state.targetHoverX = 0;
     state.targetHoverY = 0;
-    questions.forEach((question) => { question.style.translate = "0 0"; });
   }
 
   function activateQuestion(question) {
