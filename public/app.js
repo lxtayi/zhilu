@@ -980,6 +980,7 @@ checkHealth();
 
     const visited = records.slice(0, 5);
     const people = visited.flatMap((record) => record.people instanceof Map ? [...record.people.values()] : Object.values(record.people || {}));
+    const resolveEvidence = typeof findEvidence === "function" ? findEvidence : () => null;
     const start = { x: 550, y: 510 };
     const routePoints = [start, ...visited.map((record, order) => {
       const layout = layoutFor(record);
@@ -1035,7 +1036,7 @@ checkHealth();
           <div class="voyage-harvest-copy">
             <p><b>我看了</b>${escapeHtml(names.join("、"))}</p>
             <p><b>遇到了谁</b>${personNames.length ? escapeHtml(personNames.join("、")) : "还没有打开人物卡片"}</p>
-            <div class="voyage-seen-content"><b>见到了什么内容</b><ul>${people.length ? people.map(person => { const evidence = findEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]); return `<li><strong>${escapeHtml(person.name)} · ${escapeHtml(evidence?.title || "人物卡片中的观点")}</strong><q>${escapeHtml(person.quote?.text || evidence?.excerpt || person.viewpoint || "暂无内容节选")}</q></li>`; }).join("") : "<li>尚未打开人物内容。继续探索，读一段具体经历。</li>"}</ul></div>
+            <div class="voyage-seen-content"><b>见到了什么内容</b><ul>${people.length ? people.map(person => { const evidence = resolveEvidence(person.quote?.evidenceId || person.evidenceIds?.[0]); return `<li><strong>${escapeHtml(person.name)} · ${escapeHtml(evidence?.title || "人物卡片中的观点")}</strong><q>${escapeHtml(person.quote?.text || evidence?.excerpt || person.viewpoint || "暂无内容节选")}</q></li>`; }).join("") : "<li>尚未打开人物内容。继续探索，读一段具体经历。</li>"}</ul></div>
             <p><b>下一步</b>${people.length ? "继续认识感兴趣的人，带着一个具体问题发起交流。" : "选择一位岛上的知友，看看 TA 的公开观点。"}</p>
           </div>
           <div class="voyage-map-actions">
