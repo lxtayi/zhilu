@@ -91,7 +91,7 @@ function setModeBadge(mode) {
 
 async function checkHealth() {
   try {
-    const response = await staticApi("/api/health");
+    const response = await fetch("/api/health");
     const data = await response.json();
     setModeBadge(data.dataMode);
   } catch {
@@ -144,7 +144,7 @@ async function submitQuestion(question) {
 
   try {
     const [response] = await Promise.all([
-      staticApi("/api/explore", {
+      fetch("/api/explore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question })
@@ -387,7 +387,7 @@ async function generateDrafts(button, person, evidence) {
   button.textContent = "正在准备开场白…";
 
   try {
-    const response = await staticApi("/api/icebreakers", {
+    const response = await fetch("/api/icebreakers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
