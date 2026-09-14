@@ -1,0 +1,124 @@
+/* Each island question receives one grey-olive brush, with live white text. */
+body.viewpoint-mode {
+  overflow-y: auto;
+}
+
+.viewpoint-gate {
+  height: auto;
+  min-height: calc(100dvh - 110px);
+  overflow: visible;
+}
+
+.viewpoint-gate-inner {
+  height: auto;
+}
+
+.viewpoint-gate .viewpoint-gate-cards {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 25%) minmax(0, 1fr);
+  grid-template-rows: repeat(var(--question-rows, 2), auto);
+  gap: 8px 12px;
+  overflow: visible;
+}
+
+.viewpoint-gate-cards .island-question-card,
+.viewpoint-gate-cards .island-question-card:hover,
+.viewpoint-gate-cards .island-question-card:focus-visible,
+.viewpoint-gate-cards .island-question-card:nth-of-type(even) {
+  display: flex;
+  min-height: 280px;
+  padding: 54px var(--brush-right, 24%) 60px var(--brush-left, 14%);
+  border: 0;
+  border-radius: 0;
+  background: transparent url('./assets/viewpoint-ink-brush.svg') center / 100% 100% no-repeat;
+  box-shadow: none;
+  color: #ffffff;
+  overflow: visible;
+  isolation: isolate;
+  filter: none;
+}
+
+.viewpoint-gate-cards .island-question-card::before,
+.viewpoint-gate-cards .island-question-card::after {
+  content: none;
+  display: none;
+}
+
+.island-question-card .viewpoint-quote-copy {
+  gap: 7px;
+  padding: 0;
+  background: none;
+  text-shadow: 0 1px 3px rgba(12, 30, 23, .85);
+}
+
+.island-question-card .viewpoint-quote-copy strong,
+.island-question-card .island-question-summary {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.island-question-card .viewpoint-quote-copy strong {
+  font-size: clamp(16px, 1.35vw, 19px);
+  line-height: 1.5;
+}
+
+.island-question-card .viewpoint-quote-copy,
+.island-question-card .viewpoint-quote-copy strong,
+.island-question-card .island-question-heading,
+.island-question-card .island-question-heading span,
+.island-question-card .island-question-heading em,
+.island-question-card .island-question-summary,
+.island-question-card .island-question-enter,
+.island-question-card .island-question-enter span {
+  color: #ffffff;
+  opacity: 1;
+}
+
+.island-question-card .island-question-heading {
+  font-size: 11px;
+}
+
+.viewpoint-gate-cards .island-question-card:hover .island-question-enter {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.viewpoint-gate-cards .island-question-card:focus-visible {
+  outline: 2px solid #52634d;
+  outline-offset: -4px;
+}
+
+@media (min-width: 681px) and (max-width: 960px) {
+  .viewpoint-gate .viewpoint-gate-cards {
+    --brush-left: 12%;
+    --brush-right: 18%;
+    grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 680px) {
+  .viewpoint-gate {
+    height: auto;
+    min-height: calc(100dvh - 100px);
+  }
+  .viewpoint-gate .viewpoint-gate-cards {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: 4px;
+    padding: 8px;
+  }
+  .viewpoint-gate-cards .viewpoint-center-island {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .viewpoint-gate-cards .island-question-card,
+  .viewpoint-gate-cards .island-question-card:hover,
+  .viewpoint-gate-cards .island-question-card:focus-visible {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 270px;
+    padding: 54px 22% 58px 14%;
+  }
+}
