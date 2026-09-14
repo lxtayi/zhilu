@@ -29,6 +29,11 @@ export function getLlmClient() {
   const apiKey = clean(values?.apiKey);
   const baseUrl = clean(values?.baseUrl);
   const model = clean(values?.model);
+  const missingFields = [
+    !apiKey && "LLM_API_KEY",
+    !baseUrl && "LLM_BASE_URL",
+    !model && "LLM_MODEL"
+  ].filter(Boolean);
   const requestedEffort = clean(values?.reasoningEffort);
   const supportsEffort = /^(?:gpt-6-astra|o4-mini)(?:$|-)/.test(model);
   const reasoningEffort = supportsEffort
@@ -49,6 +54,9 @@ export function getLlmClient() {
     model,
     reasoningEffort,
     configured: Boolean(endpoint),
+    configurationIssue: missingFields.length
+      ? { code: "MISSING_LLM_CONFIG", fields: missingFields }
+      : (!endpoint ? { code: "INVALID_LLM_BASE_URL", fields: ["LLM_BASE_URL"] } : null),
     request(body, { signal } = {}) {
       if (!endpoint) throw new Error("LLM service is not configured.");
       return fetch(endpoint, {

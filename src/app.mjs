@@ -86,6 +86,7 @@ export function createApp() {
       dataMode: currentDataMode(),
       llmConfigured: llm.configured,
       llmModel: llm.configured ? llm.model : null,
+      llmConfigurationIssue: llm.configurationIssue,
       timestamp: new Date().toISOString()
     });
   });
