@@ -122,6 +122,16 @@ function updateCharCount() {
   elements.charCount.textContent = `${elements.input.value.length} / 100`;
 }
 
+function selectQuestion(question) {
+  const value = String(question || "").trim();
+  if (!value) return;
+  elements.input.value = value;
+  updateCharCount();
+  elements.input.focus();
+  elements.globeStage?.classList.add("question-selected");
+  window.setTimeout(() => elements.globeStage?.classList.remove("question-selected"), 650);
+}
+
 function startProgress() {
   let index = 0;
   updateProgress(index);
@@ -671,13 +681,12 @@ elements.form.addEventListener("submit", (event) => {
 });
 
 elements.input.addEventListener("input", updateCharCount);
+elements.globeStage?.addEventListener("questionselect", (event) => {
+  selectQuestion(event.detail?.question);
+});
 document.querySelectorAll("[data-question]").forEach((button) => {
   button.addEventListener("click", () => {
-    elements.input.value = button.dataset.question;
-    updateCharCount();
-    elements.input.focus();
-    elements.globeStage?.classList.add("question-selected");
-    window.setTimeout(() => elements.globeStage?.classList.remove("question-selected"), 650);
+    if (!button.closest("#questionGlobeStage")) selectQuestion(button.dataset.question);
   });
 });
 

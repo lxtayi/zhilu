@@ -353,6 +353,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     });
     if (previewIndex) previewIndex.textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
     if (previewText) previewText.textContent = question.dataset.question || question.textContent.trim();
+    stage.dispatchEvent(new CustomEvent("questionselect", {
+      detail: { question: question.dataset.question || question.textContent.trim() }
+    }));
   }
 
   function focusQuestion(question) {
