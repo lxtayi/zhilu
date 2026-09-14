@@ -141,9 +141,9 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       context.closePath();
     });
     const land = context.createLinearGradient(0, state.height * .12, state.width, state.height * .88);
-    land.addColorStop(0, "#718261");
-    land.addColorStop(.42, "#4b684c");
-    land.addColorStop(1, "#2d503b");
+    land.addColorStop(0, "#426d4e");
+    land.addColorStop(.42, "#2e5b3e");
+    land.addColorStop(1, "#234a33");
     context.fillStyle = land;
     context.fill("evenodd");
 
@@ -337,10 +337,10 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       state.radius * .04,
       centerX, centerY, state.radius * 1.12
     );
-    ocean.addColorStop(0, "#a9c0ad");
-    ocean.addColorStop(.34, "#819f89");
-    ocean.addColorStop(.72, "#587967");
-    ocean.addColorStop(1, "#365344");
+    ocean.addColorStop(0, "#e0ecb5");
+    ocean.addColorStop(.34, "#c9dd88");
+    ocean.addColorStop(.72, "#bdd47c");
+    ocean.addColorStop(1, "#afca70");
     context.fillStyle = ocean;
     context.fillRect(0, 0, state.width, state.height);
     drawGrid();
