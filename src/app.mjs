@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { exploreCacheKey } from "./lib/explore-cache-key.mjs";
 import {
   buildIcebreakers,
   currentDataMode,
@@ -88,7 +89,7 @@ export function createApp() {
   app.post("/api/explore", async (req, res, next) => {
     const startedAt = Date.now();
     try {
-      const cacheKey = `${currentDataMode()}:${String(req.body?.question || "").trim()}`;
+      const cacheKey = exploreCacheKey(currentDataMode(), req.body?.question);
       const cached = getCached(cacheKey);
       if (cached) {
         return res.json({

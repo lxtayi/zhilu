@@ -10,11 +10,12 @@ const clean = (value) => typeof value === "string" ? value.trim() : "";
  */
 export function getLlmClient() {
   let values;
-  if (["LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL"].some((key) => process.env[key] !== undefined)) {
+  if (["LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "LLM_REASONING_EFFORT"].some((key) => process.env[key] !== undefined)) {
     values = {
       apiKey: process.env.LLM_API_KEY,
       baseUrl: process.env.LLM_BASE_URL,
-      model: process.env.LLM_MODEL
+      model: process.env.LLM_MODEL,
+      reasoningEffort: process.env.LLM_REASONING_EFFORT
     };
   } else {
     try {
@@ -28,6 +29,11 @@ export function getLlmClient() {
   const apiKey = clean(values?.apiKey);
   const baseUrl = clean(values?.baseUrl);
   const model = clean(values?.model);
+  const requestedEffort = clean(values?.reasoningEffort);
+  const supportsEffort = /^(?:gpt-6-astra|o4-mini)(?:$|-)/.test(model);
+  const reasoningEffort = supportsEffort
+    ? (["low", "medium"].includes(requestedEffort) ? requestedEffort : "low")
+    : undefined;
   let endpoint;
   if (apiKey && baseUrl && model) {
     try {
@@ -41,6 +47,7 @@ export function getLlmClient() {
 
   return Object.freeze({
     model,
+    reasoningEffort,
     configured: Boolean(endpoint),
     request(body, { signal } = {}) {
       if (!endpoint) throw new Error("LLM service is not configured.");
