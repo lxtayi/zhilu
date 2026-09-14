@@ -11,7 +11,7 @@ function recap(count) {
   function element() {
     const children = new Map();
     return {
-      style: {}, listeners: {}, open: false, innerHTML: "",
+      querySelectorAll() { return []; }, style: {}, listeners: {}, open: false, innerHTML: "",
       setAttribute() {},
       addEventListener(type, fn) { this.listeners[type] = fn; },
       querySelector(selector) {
@@ -37,14 +37,14 @@ function recap(count) {
     enterIsland(index) { context.entered = index; },
     openPerson() {}, renderResult() {}, submitQuestion() {},
     restart() { context.showTrail(() => { context.restarted = true; }); },
-    showTrail() {}, showToast() {},
+    showTrail() {}, showToast() {}, findEvidence() {},
     safeColor: value => value, escapeHtml: value => String(value),
     safeAvatarUrl: value => value,
     getComputedStyle: () => ({ backgroundImage: "none" }),
     requestAnimationFrame() {}, cancelAnimationFrame() {}, setTimeout() {}
   });
   vm.runInContext(source.slice(source.indexOf("const islandLayouts"), source.indexOf("function renderIslands")) +
-    source.slice(source.indexOf("/* Voyage map modal v2 */")), context);
+    source.slice(source.indexOf("/* Voyage map modal v2 */"), source.lastIndexOf("})();")), context);
   return { context, clusters, dialogs };
 }
 
@@ -61,7 +61,7 @@ for (const count of [1, 2, 3, 4, 5]) {
     assert.equal(dialog.open, true);
     assert.equal((dialog.innerHTML.match(/class="voyage-island-label"/g) || []).length, count);
     assert.equal((dialog.innerHTML.match(/class="voyage-person-card"/g) || []).length, count);
-    assert.equal((dialog.innerHTML.match(/class="island-terrain"/g) || []).length, count);
+    assert.equal((dialog.innerHTML.match(/class="island-terrain(?: [^"]*)?"/g) || []).length, count);
     assert.ok(dialog.innerHTML.includes(`岛${count - 1}`));
     assert.ok(dialog.innerHTML.includes("https://example.com/avatar.png"));
     assert.ok(dialog.innerHTML.includes("voyage-ship"));

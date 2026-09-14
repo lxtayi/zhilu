@@ -392,3 +392,13 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     canvas.removeEventListener("pointercancel", stopDrag);
   };
 }
+
+function bootQuestionGlobe() {
+  const canvas = document.querySelector('#questionGlobeCanvas');
+  const stage = document.querySelector('#questionGlobeStage');
+  const motionSurface = document.querySelector('#heroSection');
+  if (canvas && stage && motionSurface) createQuestionGlobe({ canvas, stage, motionSurface });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootQuestionGlobe, { once: true });
+else bootQuestionGlobe();
+

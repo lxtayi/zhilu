@@ -76,27 +76,10 @@ export function buildDemoExploreResult(question, analysis) {
     };
   });
 
-  const viewpoints = clusters.map((cluster, index) => {
-    const item = evidence[index];
-    const persona = PERSONAS[index];
-    return {
-      id: item.id,
-      text: persona.quote,
-      author: { id: item.authorId, name: persona.name, avatar: "", headline: persona.headline },
-      evidenceId: item.id,
-      url: item.url,
-      clusterIndex: index,
-      voteUpCount: 0,
-      contentType: "Demo",
-      isSynthetic: true
-    };
-  });
-
   return {
     question,
     analysis,
     clusters,
-    viewpoints,
     evidence,
     status: "succeeded",
     mode: "demo",
