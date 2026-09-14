@@ -1,4 +1,4 @@
-import { COASTLINES, LAND_DOTS } from "./world-data.js";
+import { COASTLINES } from "./world-data.js";
 
 const DEG = Math.PI / 180;
 
@@ -16,21 +16,6 @@ const QUESTION_ANCHORS = [
   { lat: -38, lon: -45 }, { lat: 22, lon: 45 },
   { lat: -7, lon: -135 }, { lat: 43, lon: 105 }
 ];
-
-function seededRandom(seed) {
-  let value = seed >>> 0;
-  return () => {
-    value = (value * 1664525 + 1013904223) >>> 0;
-    return value / 4294967296;
-  };
-}
-
-const PAPER_SPECKS = Array.from({ length: 280 }, (_, index) => {
-  const random = seededRandom(index * 97 + 31);
-  const angle = random() * Math.PI * 2;
-  const radius = Math.sqrt(random());
-  return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, alpha: .018 + random() * .035 };
-});
 
 function spherePoint(latitude, longitude, yaw, pitch) {
   const lat = latitude * DEG;
@@ -124,22 +109,40 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
 
   function drawLand() {
     context.save();
-    [false, true].forEach((lightTone) => {
-      context.beginPath();
-      LAND_DOTS.forEach((dot) => {
-        if (Boolean(dot[3]) !== lightTone) return;
-        const point = project(dot[0], dot[1]);
-        if (point.z <= .015) return;
-        const size = dot[2] * (.38 + point.z * .62);
-        context.moveTo(point.x + size, point.y);
-        context.arc(point.x, point.y, size, 0, Math.PI * 2);
+    context.beginPath();
+    COASTLINES.forEach((coastline) => {
+      const vertices = coastline.map(([latitude, longitude]) => spherePoint(latitude, longitude, state.yaw, state.pitch));
+      const visible = [];
+      let previous = vertices[vertices.length - 1];
+      let previousInside = previous.z >= .015;
+      vertices.forEach((current) => {
+        const currentInside = current.z >= .015;
+        if (currentInside !== previousInside) {
+          const amount = (.015 - previous.z) / (current.z - previous.z);
+          visible.push({
+            x: previous.x + (current.x - previous.x) * amount,
+            y: previous.y + (current.y - previous.y) * amount,
+            z: .015
+          });
+        }
+        if (currentInside) visible.push(current);
+        previous = current;
+        previousInside = currentInside;
       });
-      context.fillStyle = lightTone ? "rgba(255,253,244,.58)" : "rgba(248,247,238,.84)";
-      context.fill();
+      if (visible.length < 3) return;
+      visible.forEach((point, index) => {
+        const x = state.width / 2 + point.x * state.radius;
+        const y = state.height / 2 + point.y * state.radius;
+        if (index === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      });
+      context.closePath();
     });
+    context.fillStyle = "#284c38";
+    context.fill("evenodd");
 
-    context.lineWidth = .58;
-    context.strokeStyle = "rgba(241,232,199,.38)";
+    context.lineWidth = .72;
+    context.strokeStyle = "rgba(238,238,208,.45)";
     COASTLINES.forEach((coastline) => strokeVisible(context, coastline, project));
     context.restore();
   }
@@ -184,20 +187,6 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     });
   }
 
-  function drawPaperSpecks() {
-    context.save();
-    context.fillStyle = "#f7efd8";
-    PAPER_SPECKS.forEach((speck) => {
-      context.globalAlpha = speck.alpha;
-      context.fillRect(
-        state.width / 2 + speck.x * state.radius,
-        state.height / 2 + speck.y * state.radius,
-        1, 1
-      );
-    });
-    context.restore();
-  }
-
   function drawBezel() {
     const centerX = state.width / 2; const centerY = state.height / 2;
     context.save();
@@ -219,8 +208,10 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       const point = project(anchor.lat, anchor.lon);
       const frontDepth = Math.max(0, point.z);
       const scale = .76 + frontDepth * .24;
-      question.style.left = `${state.canvasLeft + point.x}px`;
-      question.style.top = `${state.canvasTop + point.y}px`;
+      question.style.setProperty("left", `${state.canvasLeft + point.x}px`, "important");
+      question.style.setProperty("top", `${state.canvasTop + point.y}px`, "important");
+      question.style.setProperty("right", "auto", "important");
+      question.style.setProperty("bottom", "auto", "important");
       question.style.setProperty("--depth-scale", scale.toFixed(3));
       question.style.opacity = (.28 + (point.z + 1) * .34).toFixed(3);
       question.style.zIndex = question.classList.contains("is-active") ? "12" : String(4 + Math.round(frontDepth * 4));
@@ -267,17 +258,16 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       state.radius * .04,
       centerX, centerY, state.radius * 1.12
     );
-    ocean.addColorStop(0, "#d3d4bd");
-    ocean.addColorStop(.38, "#a7b29f");
-    ocean.addColorStop(.73, "#788e7c");
-    ocean.addColorStop(1, "#536b5c");
+    ocean.addColorStop(0, "#dce8cc");
+    ocean.addColorStop(.42, "#bfd5af");
+    ocean.addColorStop(.78, "#9ebd91");
+    ocean.addColorStop(1, "#86a87d");
     context.fillStyle = ocean;
     context.fillRect(0, 0, state.width, state.height);
     drawGrid();
     drawRoutes(now);
     drawLand();
     drawMarkers(now);
-    drawPaperSpecks();
     const shade = context.createLinearGradient(centerX - state.radius, 0, centerX + state.radius, 0);
     shade.addColorStop(0, "rgba(20,36,29,.06)");
     shade.addColorStop(.24, "rgba(255,249,220,.14)");
