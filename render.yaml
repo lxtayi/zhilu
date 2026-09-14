@@ -2,6 +2,10 @@ services:
   - type: web
     name: zhilu-mvp
     runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
