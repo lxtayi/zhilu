@@ -1,0 +1,50 @@
+/* Match the journal entrance to the island's muted grey-olive terrain. */
+.journal-entrance.journal-scroll-entry {
+  --journal-terrain: #a4a792;
+  --journal-ink: #ffffff;
+  --journal-text: #ffffff;
+  --journal-line: rgba(255, 255, 255, 0.55);
+  background: var(--journal-terrain) !important;
+  color: var(--journal-ink);
+}
+
+.journal-scroll-entry h3 {
+  color: var(--journal-ink);
+}
+
+.journal-scroll-entry > div > p {
+  color: var(--journal-text);
+  opacity: 1;
+}
+
+.journal-scroll-entry .eyebrow,
+.journal-scroll-entry .journal-entrance-lead {
+  color: var(--journal-text) !important;
+}
+
+.journal-scroll-entry .journal-text-link {
+  color: var(--journal-text);
+  border-bottom-color: var(--journal-text);
+}
+
+.journal-scroll-entry .journal-text-link:hover {
+  color: var(--journal-text);
+  border-bottom-color: currentColor;
+}
+
+.journal-scroll-entry .journal-text-link:focus-visible {
+  outline-color: var(--journal-ink);
+}
+
+.journal-scroll-entry .journal-scale {
+  color: var(--journal-text);
+}
+
+.journal-scroll-entry .journal-scale i {
+  background: var(--journal-terrain);
+  font-variant-emoji: text;
+}
+
+.journal-scroll-entry .journal-scale::before {
+  border-left-color: var(--journal-line);
+}
