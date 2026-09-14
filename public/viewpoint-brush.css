@@ -151,14 +151,14 @@ body.viewpoint-mode {
 
 .viewpoint-gate-cards .viewpoint-center-island {
   position:relative;
-  z-index:2;
+  z-index:6;
   grid-column:2;
   grid-row:1 / span var(--question-rows,2);
   align-self:center;
   justify-self:center;
   display:grid;
   place-items:center;
-  width:min(100%,270px);
+  width:min(100%,290px);
   height:auto;
   transform:none;
 }
@@ -175,6 +175,10 @@ body.viewpoint-mode {
 
 .viewpoint-gate-cards .viewpoint-center-island img {
   position:relative;
+  z-index:2;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
   width:100%;
   height:auto;
   max-height:310px;
@@ -249,12 +253,33 @@ body.viewpoint-mode {
   content:"";
   display:block;
   position:absolute;
-  left:clamp(24px,3vw,48px);
-  right:clamp(24px,3vw,48px);
-  bottom:28px;
-  height:1px;
-  background:linear-gradient(90deg,rgba(143,108,51,.42),rgba(143,108,51,.08),transparent);
+  z-index:-1;
+  right:0;
+  bottom:12%;
+  width:42%;
+  height:74%;
+  background:center / contain no-repeat;
+  opacity:.74;
+  mix-blend-mode:multiply;
+  filter:drop-shadow(0 8px 10px rgba(63,70,44,.1));
   pointer-events:none;
+}
+
+.viewpoint-gate-cards .island-question-card:nth-of-type(1)::after {
+  background-image:url('./assets/hand-island-1.png');
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(2)::after {
+  left:0;
+  right:auto;
+  background-image:url('./assets/hand-island-2.png');
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(3)::after {
+  background-image:url('./assets/hand-island-3.png');
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(4)::after {
+  left:0;
+  right:auto;
+  background-image:url('./assets/hand-island-4.png');
 }
 
 .viewpoint-gate-cards .island-question-card:hover {
@@ -273,6 +298,7 @@ body.viewpoint-mode {
 
 .island-question-card .viewpoint-quote-copy {
   position:relative;
+  z-index:2;
   display:flex;
   flex:1;
   min-width:0;
@@ -282,6 +308,11 @@ body.viewpoint-mode {
   background:none;
   color:#28382e;
   text-shadow:none;
+  max-width:70%;
+}
+
+.viewpoint-gate-cards .island-question-card:nth-of-type(even) .viewpoint-quote-copy {
+  margin-left:auto;
 }
 
 .island-question-card .island-question-heading {
@@ -370,8 +401,7 @@ body.viewpoint-mode {
     padding:24px 20px;
   }
   .viewpoint-gate-cards .island-question-card::after {
-    left:20px;
-    right:20px;
+    width:38%;
   }
 }
 
@@ -419,6 +449,13 @@ body.viewpoint-mode {
   }
   .viewpoint-gate-cards .island-question-card::before {
     inset:8px -2%;
+  }
+  .viewpoint-gate-cards .island-question-card::after {
+    width:40%;
+    height:68%;
+  }
+  .island-question-card .viewpoint-quote-copy {
+    max-width:72%;
   }
   .island-question-card .viewpoint-quote-copy strong {
     font-size:17px;

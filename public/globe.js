@@ -14,7 +14,9 @@ const QUESTION_ANCHORS = [
   { lat: 34, lon: -105 }, { lat: -12, lon: 80 },
   { lat: 52, lon: 20 }, { lat: 8, lon: 140 },
   { lat: -38, lon: -45 }, { lat: 22, lon: 45 },
-  { lat: -7, lon: -135 }, { lat: 43, lon: 105 }
+  { lat: -7, lon: -135 }, { lat: 43, lon: 105 },
+  { lat: -54, lon: 26 }, { lat: 66, lon: -58 },
+  { lat: 3, lon: -8 }, { lat: -27, lon: 168 }
 ];
 
 function seededRandom(seed) {
