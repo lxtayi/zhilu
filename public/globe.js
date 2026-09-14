@@ -17,6 +17,8 @@ const QUESTION_ANCHORS = [
   { lat: -7, lon: -135 }, { lat: 43, lon: 105 }
 ];
 
+const MANSION_NAMES = ["角", "亢", "氐", "房", "心", "尾", "箕", "斗", "牛", "女", "虚", "危", "室", "壁"];
+
 function spherePoint(latitude, longitude, yaw, pitch) {
   const lat = latitude * DEG;
   const lon = longitude * DEG + yaw;
@@ -93,13 +95,13 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     context.save();
     context.lineWidth = .72;
     for (let latitude = -45; latitude <= 45; latitude += 45) {
-      context.strokeStyle = latitude === 0 ? "rgba(231,225,199,.24)" : "rgba(231,225,199,.14)";
+      context.strokeStyle = latitude === 0 ? "rgba(232,218,175,.42)" : "rgba(237,233,205,.2)";
       const points = [];
       for (let longitude = -180; longitude <= 180; longitude += 3) points.push([latitude, longitude]);
       strokeVisible(context, points, project);
     }
     for (let longitude = -180; longitude < 180; longitude += 60) {
-      context.strokeStyle = "rgba(231,225,199,.14)";
+      context.strokeStyle = "rgba(237,233,205,.2)";
       const points = [];
       for (let latitude = -90; latitude <= 90; latitude += 2) points.push([latitude, longitude]);
       strokeVisible(context, points, project);
@@ -138,12 +140,89 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       });
       context.closePath();
     });
-    context.fillStyle = "#284c38";
+    const land = context.createLinearGradient(0, state.height * .12, state.width, state.height * .88);
+    land.addColorStop(0, "#718261");
+    land.addColorStop(.42, "#4b684c");
+    land.addColorStop(1, "#2d503b");
+    context.fillStyle = land;
     context.fill("evenodd");
 
-    context.lineWidth = .72;
-    context.strokeStyle = "rgba(238,238,208,.45)";
+    context.lineWidth = .62;
+    context.strokeStyle = "rgba(244,230,191,.62)";
     COASTLINES.forEach((coastline) => strokeVisible(context, coastline, project));
+    context.restore();
+  }
+
+  function drawCelestialSystem(now) {
+    const activeIndex = questions.findIndex((question) => question.classList.contains("is-active"));
+    const ecliptic = [];
+    for (let longitude = -180; longitude <= 180; longitude += 3) {
+      ecliptic.push([Math.sin(longitude * DEG) * 18, longitude]);
+    }
+
+    context.save();
+    context.setLineDash([2, 5]);
+    context.lineDashOffset = reducedMotion.matches ? 0 : -now * .004;
+    context.lineWidth = .72;
+    context.strokeStyle = "rgba(238,215,160,.5)";
+    strokeVisible(context, ecliptic, project);
+    context.setLineDash([]);
+
+    for (let index = 0; index < 28; index += 1) {
+      const longitude = -180 + index * (360 / 28);
+      const latitude = Math.sin(longitude * DEG) * 18;
+      const point = project(latitude, longitude);
+      if (point.z <= .035) continue;
+      const major = index % 2 === 0;
+      context.beginPath();
+      context.arc(point.x, point.y, major ? 1.25 : .72, 0, Math.PI * 2);
+      context.fillStyle = major ? "rgba(255,246,213,.88)" : "rgba(249,242,216,.62)";
+      context.fill();
+      if (major && point.z > .5) {
+        context.fillStyle = "rgba(255,239,198,.58)";
+        context.font = "8px STKaiti, KaiTi, serif";
+        context.fillText(MANSION_NAMES[(index / 2) % MANSION_NAMES.length], point.x + 4, point.y - 4);
+      }
+    }
+
+    QUESTION_ANCHORS.forEach((anchor, index) => {
+      const companions = [
+        [anchor.lat, anchor.lon],
+        [anchor.lat + (index % 2 ? 6 : -5), anchor.lon + 8],
+        [anchor.lat + (index % 3 ? -4 : 7), anchor.lon + 16]
+      ];
+      const active = activeIndex === index;
+      context.beginPath();
+      let drawing = false;
+      companions.forEach(([latitude, longitude]) => {
+        const point = project(latitude, longitude);
+        if (point.z <= .025) { drawing = false; return; }
+        if (drawing) context.lineTo(point.x, point.y);
+        else context.moveTo(point.x, point.y);
+        drawing = true;
+      });
+      context.lineWidth = active ? 1.15 : .58;
+      context.strokeStyle = active ? "rgba(255,233,174,.95)" : "rgba(246,238,210,.38)";
+      context.stroke();
+
+      companions.forEach(([latitude, longitude], companionIndex) => {
+        const point = project(latitude, longitude);
+        if (point.z <= .025) return;
+        const radius = companionIndex === 0 ? (active ? 3.1 : 1.8) : 1.05;
+        context.beginPath();
+        context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+        context.fillStyle = active ? "rgba(255,247,222,.99)" : "rgba(252,249,232,.82)";
+        context.fill();
+        if (active && companionIndex === 0) {
+          const pulse = reducedMotion.matches ? 0 : (Math.sin(now * .003) + 1) * 1.5;
+          context.beginPath();
+          context.arc(point.x, point.y, 7 + pulse, 0, Math.PI * 2);
+          context.strokeStyle = "rgba(255,231,171,.66)";
+          context.lineWidth = .8;
+          context.stroke();
+        }
+      });
+    });
     context.restore();
   }
 
@@ -152,7 +231,7 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
     context.setLineDash([2.2, 4.8]);
     context.lineDashOffset = reducedMotion.matches ? 0 : -now * .008;
     context.lineWidth = .85;
-    context.strokeStyle = "rgba(185,128,76,.46)";
+    context.strokeStyle = "rgba(151,91,48,.58)";
     ROUTES.forEach(([fromIndex, toIndex]) => {
       const from = CITIES[fromIndex]; const to = CITIES[toIndex];
       const points = [];
@@ -177,11 +256,11 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       const alpha = .34 + point.z * .52;
       context.beginPath();
       context.arc(point.x, point.y, 2.15 + (index % 3 === 0 ? .7 : 0), 0, Math.PI * 2);
-      context.fillStyle = `rgba(192,139,73,${alpha})`;
+      context.fillStyle = `rgba(255,253,239,${alpha})`;
       context.fill();
       context.beginPath();
       context.arc(point.x, point.y, 5.5 + pulse, 0, Math.PI * 2);
-      context.strokeStyle = `rgba(214,177,111,${alpha * .52})`;
+      context.strokeStyle = `rgba(255,229,166,${alpha * .62})`;
       context.lineWidth = .7;
       context.stroke();
     });
@@ -190,12 +269,12 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
   function drawBezel() {
     const centerX = state.width / 2; const centerY = state.height / 2;
     context.save();
-    context.strokeStyle = "rgba(52,68,55,.5)";
+    context.strokeStyle = "rgba(101,85,49,.5)";
     context.lineWidth = 1;
     context.beginPath();
     context.arc(centerX, centerY, state.radius + 1, 0, Math.PI * 2);
     context.stroke();
-    context.strokeStyle = "rgba(111,94,62,.18)";
+    context.strokeStyle = "rgba(74,106,87,.23)";
     context.beginPath();
     context.arc(centerX, centerY, state.radius + 7, 0, Math.PI * 2);
     context.stroke();
@@ -258,21 +337,22 @@ export function createQuestionGlobe({ canvas, stage, motionSurface }) {
       state.radius * .04,
       centerX, centerY, state.radius * 1.12
     );
-    ocean.addColorStop(0, "#dce8cc");
-    ocean.addColorStop(.42, "#bfd5af");
-    ocean.addColorStop(.78, "#9ebd91");
-    ocean.addColorStop(1, "#86a87d");
+    ocean.addColorStop(0, "#a9c0ad");
+    ocean.addColorStop(.34, "#819f89");
+    ocean.addColorStop(.72, "#587967");
+    ocean.addColorStop(1, "#365344");
     context.fillStyle = ocean;
     context.fillRect(0, 0, state.width, state.height);
     drawGrid();
     drawRoutes(now);
     drawLand();
+    drawCelestialSystem(now);
     drawMarkers(now);
     const shade = context.createLinearGradient(centerX - state.radius, 0, centerX + state.radius, 0);
-    shade.addColorStop(0, "rgba(20,36,29,.06)");
-    shade.addColorStop(.24, "rgba(255,249,220,.14)");
+    shade.addColorStop(0, "rgba(42,61,44,.15)");
+    shade.addColorStop(.24, "rgba(255,249,218,.16)");
     shade.addColorStop(.62, "rgba(255,255,255,0)");
-    shade.addColorStop(1, "rgba(15,28,22,.24)");
+    shade.addColorStop(1, "rgba(28,48,37,.38)");
     context.fillStyle = shade;
     context.fillRect(0, 0, state.width, state.height);
     context.restore();
