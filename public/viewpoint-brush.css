@@ -1,124 +1,426 @@
-/* Each island question receives one grey-olive brush, with live white text. */
+/* Quiet ink-on-silk treatment for the four island questions. */
 body.viewpoint-mode {
-  overflow-y: auto;
+  overflow-y:auto;
+  background:
+    radial-gradient(circle at 14% 16%,rgba(171,184,151,.12),transparent 30%),
+    radial-gradient(circle at 82% 72%,rgba(173,145,91,.07),transparent 33%),
+    linear-gradient(112deg,#f2ecdc 0%,#f7f3e7 46%,#eee6d4 100%);
 }
 
 .viewpoint-gate {
-  height: auto;
-  min-height: calc(100dvh - 110px);
-  overflow: visible;
+  position:relative;
+  height:auto;
+  min-height:calc(100dvh - 110px);
+  padding:clamp(34px,5vh,58px) 28px 48px;
+  overflow:hidden;
+}
+
+.viewpoint-gate::before {
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  opacity:.28;
+  background:
+    repeating-linear-gradient(0deg,rgba(77,66,43,.018) 0 1px,transparent 1px 4px),
+    linear-gradient(90deg,transparent 0 49.9%,rgba(117,99,62,.035) 50%,transparent 50.1%);
 }
 
 .viewpoint-gate-inner {
-  height: auto;
+  width:min(1380px,100%);
+  height:auto;
+  min-height:0;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:clamp(20px,3vh,32px);
+  text-align:center;
+}
+
+.viewpoint-gate-copy {
+  flex:none;
+  width:min(820px,100%);
+  margin:0 auto;
+}
+
+.viewpoint-gate-copy .eyebrow {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:13px;
+  margin:0 0 12px;
+  color:#987536;
+  font:600 10px/1.4 var(--sans);
+  letter-spacing:.24em;
+}
+
+.viewpoint-gate-copy .eyebrow::before,
+.viewpoint-gate-copy .eyebrow::after {
+  content:"";
+  width:34px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,rgba(152,117,54,.58));
+}
+
+.viewpoint-gate-copy .eyebrow::after {
+  transform:scaleX(-1);
+}
+
+.viewpoint-gate h2 {
+  margin:0;
+  color:#26372c;
+  font:500 clamp(32px,3.1vw,48px)/1.28 "Songti SC","STSong","Noto Serif SC",var(--serif);
+  letter-spacing:.055em;
+  text-wrap:balance;
+}
+
+#viewpointGateWarnings {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  width:auto;
+  margin:13px auto 0;
+  padding:6px 13px;
+  border:1px solid rgba(112,99,70,.16);
+  border-radius:999px;
+  color:#706852;
+  background:rgba(255,252,242,.55);
+  font:11px/1.45 var(--sans);
+  letter-spacing:.025em;
+}
+
+#viewpointGateWarnings::before {
+  content:"";
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:#9f7a39;
+  box-shadow:0 0 0 3px rgba(159,122,57,.09);
+}
+
+#viewpointGateWarnings[hidden] {
+  display:none;
+}
+
+.viewpoint-gate-note {
+  max-width:680px;
+  margin:13px auto 0;
+  color:#766f5e;
+  font:14px/1.8 "Songti SC","STSong","Noto Serif SC",var(--serif);
+  letter-spacing:.035em;
 }
 
 .viewpoint-gate .viewpoint-gate-cards {
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 25%) minmax(0, 1fr);
-  grid-template-rows: repeat(var(--question-rows, 2), auto);
-  gap: 8px 12px;
-  overflow: visible;
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(190px,25%) minmax(0,1fr);
+  grid-template-rows:repeat(var(--question-rows,2),minmax(220px,auto));
+  align-items:stretch;
+  gap:10px clamp(10px,2vw,30px);
+  width:100%;
+  height:auto;
+  min-height:0;
+  margin:0;
+  padding:0 8px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  overflow:visible;
+  perspective:none;
+  transform-style:flat;
+}
+
+.viewpoint-gate .viewpoint-gate-cards::before {
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:min(34vw,390px);
+  aspect-ratio:1.45;
+  border:1px solid rgba(149,124,70,.15);
+  border-radius:50%;
+  box-shadow:0 0 0 24px rgba(149,124,70,.028),0 0 0 52px rgba(76,101,78,.018);
+  transform:translate(-50%,-50%) rotate(-8deg);
+  pointer-events:none;
+}
+
+.viewpoint-gate .viewpoint-gate-cards::after {
+  content:none;
+}
+
+.viewpoint-gate-cards .viewpoint-center-island {
+  position:relative;
+  z-index:2;
+  grid-column:2;
+  grid-row:1 / span var(--question-rows,2);
+  align-self:center;
+  justify-self:center;
+  display:grid;
+  place-items:center;
+  width:min(100%,270px);
+  height:auto;
+  transform:none;
+}
+
+.viewpoint-gate-cards .viewpoint-center-island::before {
+  content:"";
+  position:absolute;
+  width:130%;
+  aspect-ratio:1;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(177,190,157,.2),transparent 64%);
+  filter:blur(12px);
+}
+
+.viewpoint-gate-cards .viewpoint-center-island img {
+  position:relative;
+  width:100%;
+  height:auto;
+  max-height:310px;
+  object-fit:contain;
+  filter:drop-shadow(0 16px 18px rgba(67,72,47,.1));
 }
 
 .viewpoint-gate-cards .island-question-card,
+.viewpoint-gate-cards .island-question-card:nth-of-type(even),
 .viewpoint-gate-cards .island-question-card:hover,
-.viewpoint-gate-cards .island-question-card:focus-visible,
-.viewpoint-gate-cards .island-question-card:nth-of-type(even) {
-  display: flex;
-  min-height: 280px;
-  padding: 54px var(--brush-right, 24%) 60px var(--brush-left, 14%);
-  border: 0;
-  border-radius: 0;
-  background: transparent url('./assets/viewpoint-ink-brush.svg') center / 100% 100% no-repeat;
-  box-shadow: none;
-  color: #ffffff;
-  overflow: visible;
-  isolation: isolate;
-  filter: none;
+.viewpoint-gate-cards .island-question-card:focus-visible {
+  position:relative;
+  inset:auto;
+  z-index:1;
+  grid-row:var(--question-row);
+  grid-column:var(--question-column);
+  display:flex;
+  align-items:center;
+  width:100%!important;
+  min-width:0;
+  min-height:220px;
+  margin:0;
+  padding:28px clamp(24px,3vw,48px);
+  border:0;
+  border-radius:0;
+  color:#28382e;
+  background:transparent;
+  box-shadow:none;
+  overflow:visible;
+  isolation:isolate;
+  text-align:left;
+  transform:none;
+  translate:none;
+  rotate:none;
+  animation:none;
+  filter:none;
 }
 
-.viewpoint-gate-cards .island-question-card::before,
+.viewpoint-gate-cards .island-question-card::before {
+  content:"";
+  display:block;
+  position:absolute;
+  inset:6px -3%;
+  z-index:-2;
+  border:0;
+  border-radius:0;
+  background:center / 100% 100% no-repeat;
+  opacity:.16;
+  mix-blend-mode:multiply;
+  transform:none;
+  transition:opacity .28s ease,transform .32s ease;
+  pointer-events:none;
+}
+
+.viewpoint-gate-cards .island-question-card:nth-of-type(1)::before {
+  background-image:url('./assets/ink-strokes/ink-stroke-01.webp');
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(2)::before {
+  background-image:url('./assets/ink-strokes/ink-stroke-02.webp');
+  transform:scaleX(-1) rotate(-1deg);
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(3)::before {
+  background-image:url('./assets/ink-strokes/ink-stroke-03.webp');
+  transform:rotate(1deg);
+}
+.viewpoint-gate-cards .island-question-card:nth-of-type(4)::before {
+  background-image:url('./assets/ink-strokes/ink-stroke-04.webp');
+  transform:scaleX(-1) rotate(1deg);
+}
+
 .viewpoint-gate-cards .island-question-card::after {
-  content: none;
-  display: none;
+  content:"";
+  display:block;
+  position:absolute;
+  left:clamp(24px,3vw,48px);
+  right:clamp(24px,3vw,48px);
+  bottom:28px;
+  height:1px;
+  background:linear-gradient(90deg,rgba(143,108,51,.42),rgba(143,108,51,.08),transparent);
+  pointer-events:none;
 }
 
-.island-question-card .viewpoint-quote-copy {
-  gap: 7px;
-  padding: 0;
-  background: none;
-  text-shadow: 0 1px 3px rgba(12, 30, 23, .85);
+.viewpoint-gate-cards .island-question-card:hover {
+  z-index:3;
+  transform:translateY(-4px);
 }
 
-.island-question-card .viewpoint-quote-copy strong,
-.island-question-card .island-question-summary {
-  display: block;
-  overflow: visible;
-  -webkit-line-clamp: unset;
-}
-
-.island-question-card .viewpoint-quote-copy strong {
-  font-size: clamp(16px, 1.35vw, 19px);
-  line-height: 1.5;
-}
-
-.island-question-card .viewpoint-quote-copy,
-.island-question-card .viewpoint-quote-copy strong,
-.island-question-card .island-question-heading,
-.island-question-card .island-question-heading span,
-.island-question-card .island-question-heading em,
-.island-question-card .island-question-summary,
-.island-question-card .island-question-enter,
-.island-question-card .island-question-enter span {
-  color: #ffffff;
-  opacity: 1;
-}
-
-.island-question-card .island-question-heading {
-  font-size: 11px;
-}
-
-.viewpoint-gate-cards .island-question-card:hover .island-question-enter {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.viewpoint-gate-cards .island-question-card:hover::before {
+  opacity:.23;
 }
 
 .viewpoint-gate-cards .island-question-card:focus-visible {
-  outline: 2px solid #52634d;
-  outline-offset: -4px;
+  outline:1px solid rgba(72,99,76,.56);
+  outline-offset:-8px;
 }
 
-@media (min-width: 681px) and (max-width: 960px) {
-  .viewpoint-gate .viewpoint-gate-cards {
-    --brush-left: 12%;
-    --brush-right: 18%;
-    grid-template-columns: minmax(0, 1fr) 120px minmax(0, 1fr);
-    gap: 8px;
-    padding: 8px;
-  }
+.island-question-card .viewpoint-quote-copy {
+  position:relative;
+  display:flex;
+  flex:1;
+  min-width:0;
+  flex-direction:column;
+  gap:9px;
+  padding:0;
+  background:none;
+  color:#28382e;
+  text-shadow:none;
 }
 
-@media (max-width: 680px) {
+.island-question-card .island-question-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  color:#8c6b34;
+  font:600 10px/1.4 var(--sans);
+  letter-spacing:.09em;
+}
+
+.island-question-card .island-question-heading span {
+  color:#75613d;
+  white-space:normal;
+}
+
+.island-question-card .island-question-heading em {
+  color:#667365;
+  font-style:normal;
+  font-weight:500;
+  letter-spacing:.04em;
+  white-space:nowrap;
+}
+
+.island-question-card .viewpoint-quote-copy strong {
+  display:block;
+  overflow:visible;
+  color:#25362b;
+  font:500 clamp(18px,1.45vw,23px)/1.58 "Songti SC","STSong","Noto Serif SC",var(--serif);
+  letter-spacing:.035em;
+  -webkit-line-clamp:unset;
+  text-wrap:pretty;
+}
+
+.island-question-card .island-question-summary {
+  display:-webkit-box;
+  overflow:hidden;
+  color:#676b5f;
+  font:12px/1.7 "Songti SC","STSong","Noto Serif SC",var(--serif);
+  letter-spacing:.02em;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+}
+
+.island-question-card .island-question-enter {
+  width:max-content;
+  margin-top:1px;
+  color:#355744;
+  font:600 11px/1.5 var(--sans);
+  letter-spacing:.06em;
+  transition:color .2s ease,transform .2s ease;
+}
+
+.viewpoint-gate-cards .island-question-card:hover .island-question-enter {
+  color:#9a7130;
+  transform:translateX(3px);
+}
+
+.viewpoint-gate-cards .viewpoint-cloud-loading,
+.viewpoint-gate-cards .viewpoint-cloud-empty {
+  position:static;
+  grid-column:1/-1;
+  align-self:center;
+  justify-self:center;
+  width:min(520px,100%);
+  padding:28px;
+  border:1px solid rgba(108,96,69,.2);
+  color:#6e6858;
+  background:rgba(255,252,242,.45);
+  font:14px/1.8 var(--serif);
+  transform:none;
+}
+
+@media (min-width:681px) and (max-width:960px) {
   .viewpoint-gate {
-    height: auto;
-    min-height: calc(100dvh - 100px);
+    padding-inline:16px;
   }
   .viewpoint-gate .viewpoint-gate-cards {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    gap: 4px;
-    padding: 8px;
+    grid-template-columns:minmax(0,1fr) 145px minmax(0,1fr);
+    gap:8px;
+    padding:0;
+  }
+  .viewpoint-gate-cards .island-question-card {
+    min-height:200px;
+    padding:24px 20px;
+  }
+  .viewpoint-gate-cards .island-question-card::after {
+    left:20px;
+    right:20px;
+  }
+}
+
+@media (max-width:680px) {
+  .viewpoint-gate {
+    width:calc(100% - 20px);
+    min-height:calc(100dvh - 90px);
+    padding:24px 0 36px;
+    overflow:visible;
+  }
+  .viewpoint-gate h2 {
+    font-size:clamp(25px,8vw,34px);
+  }
+  #viewpointGateWarnings {
+    max-width:92%;
+    font-size:10px;
+  }
+  .viewpoint-gate-note {
+    padding:0 14px;
+    font-size:12px;
+  }
+  .viewpoint-gate .viewpoint-gate-cards {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:none;
+    gap:2px;
+    padding:0;
   }
   .viewpoint-gate-cards .viewpoint-center-island {
-    grid-column: 1;
-    grid-row: auto;
+    grid-column:1;
+    grid-row:auto;
+    width:145px;
+    height:110px;
+    order:-1;
+  }
+  .viewpoint-gate-cards .viewpoint-center-island img {
+    max-height:110px;
   }
   .viewpoint-gate-cards .island-question-card,
   .viewpoint-gate-cards .island-question-card:hover,
   .viewpoint-gate-cards .island-question-card:focus-visible {
-    grid-column: 1;
-    grid-row: auto;
-    min-height: 270px;
-    padding: 54px 22% 58px 14%;
+    grid-column:1;
+    grid-row:auto;
+    min-height:190px;
+    padding:28px 24px 34px;
+  }
+  .viewpoint-gate-cards .island-question-card::before {
+    inset:8px -2%;
+  }
+  .island-question-card .viewpoint-quote-copy strong {
+    font-size:17px;
   }
 }
