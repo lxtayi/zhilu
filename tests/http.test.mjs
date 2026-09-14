@@ -30,6 +30,8 @@ test("首页和健康检查可访问", async () => {
     assert.match(page, /知路/);
     assert.equal(health.status, "ok");
     assert.equal(health.dataMode, "demo");
+    assert.equal(typeof health.llmConfigured, "boolean");
+    assert.ok("llmModel" in health);
   });
 });
 

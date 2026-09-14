@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getLlmClient } from "./config/llm.mjs";
 import { exploreCacheKey } from "./lib/explore-cache-key.mjs";
 import {
   buildIcebreakers,
@@ -77,11 +78,14 @@ export function createApp() {
   app.use(express.static(publicDir));
 
   app.get("/api/health", (req, res) => {
+    const llm = getLlmClient();
     res.json({
       status: "ok",
       service: "zhilu-mvp",
       version: "0.1.0",
       dataMode: currentDataMode(),
+      llmConfigured: llm.configured,
+      llmModel: llm.configured ? llm.model : null,
       timestamp: new Date().toISOString()
     });
   });
