@@ -305,13 +305,60 @@ function buildIcebreakers({ question, person, evidence }) {
   };
 }
 
+// Allow the live search + semantic classification pipeline to complete before fallback.
+const EXPLORE_TIMEOUT_MS = 45000;
+
 async function staticApi(path, options = {}) {
+  const endpoint = path.split("?")[0].split("/").pop();
+  if (!["health", "explore", "icebreakers"].includes(endpoint)) return fetch(path, options);
+  let reason = "当前通过本地文件打开，无法连接真实数据接口；已使用明确标注的演示数据。";
+  if (options.signal?.aborted) throw new DOMException("请求已取消。", "AbortError");
   if (window.location.protocol !== "file:") {
-    try { const c=new AbortController(); const t=setTimeout(()=>c.abort(),12000); const r=await fetch(path,{...options,signal:c.signal}); clearTimeout(t); if(r.ok)return r; } catch {}
+    const controller = new AbortController();
+    const timeoutMs = endpoint === "explore" ? EXPLORE_TIMEOUT_MS : endpoint === "health" ? 8000 : 15000;
+    let timedOut = false;
+    let timer;
+    const cancel = () => controller.abort();
+    options.signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      const request = (async () => {
+        const response = await fetch(path, { ...options, signal: controller.signal });
+        // Invalid input, authorization and rate limits must remain errors, not fake successes.
+        if (response.status >= 400 && response.status < 500) return response;
+        if (!response.ok) {
+          reason = "真实数据接口返回 HTTP " + response.status + "，已回退演示数据。";
+          return null;
+        }
+        // Include response-body loading in the deadline, not only response headers.
+        const data = await response.json();
+        return { ok: true, status: response.status, json: async () => data };
+      })();
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+          reject(new DOMException("请求超时。", "TimeoutError"));
+        }, timeoutMs);
+      });
+      const result = await Promise.race([request, deadline]);
+      if (result) return result;
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      reason = timedOut
+        ? "真实数据请求等待 " + timeoutMs / 1000 + " 秒后超时，已回退演示数据。"
+        : error?.name === "SyntaxError"
+          ? "真实数据接口返回了无效的数据格式，已回退演示数据。"
+          : "无法连接真实数据服务（网络或服务异常），已回退演示数据。";
+    } finally {
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", cancel);
+    }
   }
-  const input=JSON.parse(options.body||"{}"); let data;
-  if(path.endsWith("health")) data={dataMode:"demo"};
-  else if(path.endsWith("icebreakers")) data=buildIcebreakers(input);
-  else { data=buildDemoExploreResult(input.question,buildQuestionAnalysis(input.question)); data.warnings=[{message:"当前为本地演示数据；连接后端并配置知乎凭证后将读取真实数据。"}]; }
-  return {ok:true,json:async()=>data};
+  const input = JSON.parse(options.body || "{}");
+  const warnings = [{ code: "STATIC_FALLBACK", message: reason }];
+  let data;
+  if (endpoint === "health") data = { dataMode: "demo", warnings };
+  else if (endpoint === "icebreakers") data = { ...buildIcebreakers(input), warnings };
+  else data = { ...buildDemoExploreResult(input.question, buildQuestionAnalysis(input.question)), mode: "fallback", warnings };
+  return { ok: true, status: 200, json: async () => data };
 }
